@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  DOCENTE
+  ALUNO
+}
+
+model User {
+  id            String          @id @default(cuid())
+  nome          String
+  email         String          @unique
+  emailVerified DateTime?
+  senha         String?
+  avatar        String?
+  role          Role            @default(ALUNO)
+  accounts      Account[]
+  sessions      Session[]
+  simulados     Simulado[]
+  turmasDocente Turma[]         @relation("DocenteTurmas")
+  turmasAluno   TurmaAluno[]    @relation("AlunoTurmas")
+  tentativas    Tentativa[]     @relation("AlunoTentativas")
+  notificacoes  Notificacao[]
+  conquistas    UserConquista[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// SIMULADOS
+
+enum StatusSimulado {
+  ATIVO
+  INATIVO
+  EM_EDICAO
+}
+
+model Simulado {
+  id           String         @id @default(cuid())
+  nome         String
+  descricao    String?
+  categoria    String
+  subcategoria String?
+  status       StatusSimulado @default(EM_EDICAO)
+  imagemUrl    String?
+  docenteId    String
+  docente      User           @relation(fields: [docenteId], references: [id])
+  questoes     Questao[]
+  provas       Prova[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([nome, docenteId])
+}
+
+// QUESTÕES
+
+enum TipoQuestao {
+  MULTIPLA_ESCOLHA_UNICA
+  MULTIPLA_ESCOLHA_MULTIPLA
+  DRAG_DROP
+  ASSOCIACAO
+  ORDENACAO
+  LACUNA
+  HOTSPOT
+  COMANDO
+}
+
+enum Dificuldade {
+  FACIL
+  MEDIO
+  DIFICIL
+}
+
+model Questao {
+  id           String        @id @default(cuid())
+  simuladoId   String
+  simulado     Simulado      @relation(fields: [simuladoId], references: [id], onDelete: Cascade)
+  tipo         TipoQuestao
+  enunciado    String        @db.Text
+  imagemUrl    String?
+  explicacao   String?       @db.Text
+  dificuldade  Dificuldade
+  peso         Float         @default(1.0)
+  tags         String[]
+  ordem        Int           @default(0)
+  ativo        Boolean       @default(true)
+  configuracao Json?
+  alternativas Alternativa[]
+  provas       ProvaQuestao[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Alternativa {
+  id        String  @id @default(cuid())
+  questaoId String
+  questao   Questao @relation(fields: [questaoId], references: [id], onDelete: Cascade)
+  texto     String
+  imagemUrl String?
+  correta   Boolean @default(false)
+  ordem     Int     @default(0)
+}
+
+// PROVAS
+
+enum NotaConsiderada {
+  MAIOR
+  ULTIMA
+}
+
+enum MostrarResultado {
+  IMEDIATO
+  DATA
+  NUNCA
+}
+
+enum StatusProva {
+  RASCUNHO
+  PUBLICADA
+  ENCERRADA
+}
+
+model Prova {
+  id                     String           @id @default(cuid())
+  simuladoId             String
+  simulado               Simulado         @relation(fields: [simuladoId], references: [id], onDelete: Cascade)
+  codigo                 String           @unique
+  nome                   String
+  descricao              String?
+  tempoLimite            Int?
+  tentativasMax          Int              @default(3)
+  intervaloTentativas    Int              @default(24)
+  notaMinima             Float            @default(70)
+  notaConsiderada        NotaConsiderada  @default(MAIOR)
+  mostrarResultado       MostrarResultado @default(IMEDIATO)
+  dataResultado          DateTime?
+  embaralharQuestoes     Boolean          @default(true)
+  embaralharAlternativas Boolean          @default(true)
+  status                 StatusProva      @default(RASCUNHO)
+  questoes               ProvaQuestao[]
+  tentativas             Tentativa[]
+  turmas                 TurmaProva[]
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+}
+
+model ProvaQuestao {
+  id        String  @id @default(cuid())
+  provaId   String
+  prova     Prova   @relation(fields: [provaId], references: [id], onDelete: Cascade)
+  questaoId String
+  questao   Questao @relation(fields: [questaoId], references: [id])
+  ordem     Int
+
+  @@unique([provaId, questaoId])
+}
+
+// TURMAS
+
+model Turma {
+  id        String       @id @default(cuid())
+  nome      String
+  descricao String?
+  codigo    String       @unique
+  docenteId String
+  docente   User         @relation("DocenteTurmas", fields: [docenteId], references: [id])
+  ativa     Boolean      @default(true)
+  provas    TurmaProva[]
+  alunos    TurmaAluno[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model TurmaProva {
+  id        String   @id @default(cuid())
+  turmaId   String
+  turma     Turma    @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  provaId   String
+  prova     Prova    @relation(fields: [provaId], references: [id], onDelete: Cascade)
+  dataInicio DateTime?
+  dataFim    DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([turmaId, provaId])
+}
+
+model TurmaAluno {
+  id          String   @id @default(cuid())
+  turmaId     String
+  turma       Turma    @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  alunoId     String
+  aluno       User     @relation("AlunoTurmas", fields: [alunoId], references: [id])
+  dataEntrada DateTime @default(now())
+
+  @@unique([turmaId, alunoId])
+}
+
+// TENTATIVAS
+
+enum StatusTentativa {
+  EM_ANDAMENTO
+  SUBMETIDA
+  EXPIRADA
+}
+
+model Tentativa {
+  id            String          @id @default(cuid())
+  provaId       String
+  prova         Prova           @relation(fields: [provaId], references: [id], onDelete: Cascade)
+  alunoId       String
+  aluno         User            @relation("AlunoTentativas", fields: [alunoId], references: [id])
+  numero        Int             @default(1)
+  dataInicio    DateTime        @default(now())
+  dataFim       DateTime?
+  tempoGasto    Int?
+  nota          Float?
+  totalAcertos  Int?
+  totalQuestoes Int
+  status        StatusTentativa @default(EM_ANDAMENTO)
+  respostas     Resposta[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([provaId, alunoId, numero])
+}
+
+model Resposta {
+  id              String    @id @default(cuid())
+  tentativaId     String
+  tentativa       Tentativa @relation(fields: [tentativaId], references: [id], onDelete: Cascade)
+  questaoId       String
+  provaQuestaoId  String
+  resposta        Json
+  correta         Boolean?
+  pontuacao       Float?
+  tempoResposta   Int?
+  marcadaRevisao  Boolean   @default(false)
+  // Feedback do docente
+  feedbackDocente String?   @db.Text
+  feedbackData    DateTime?
+  feedbackVisto   Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// NOTIFICAÇÕES
+
+enum TipoNotificacao {
+  NOVA_PROVA
+  PRAZO_PROVA
+  RESULTADO_DISPONIVEL
+  NOVA_TURMA
+  AVISO_DOCENTE
+  SISTEMA
+}
+
+model Notificacao {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipo      TipoNotificacao
+  titulo    String
+  mensagem  String           @db.Text
+  link      String?
+  lida      Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, lida])
+}
+
+// CONQUISTAS / GAMIFICAÇÃO
+
+enum TipoConquista {
+  PRIMEIRA_PROVA
+  PRIMEIRA_APROVACAO
+  STREAK_3
+  STREAK_7
+  STREAK_30
+  NOTA_PERFEITA
+  NOTA_90
+  APROVACOES_5
+  APROVACOES_10
+  APROVACOES_25
+  PROVAS_10
+  PROVAS_25
+  PROVAS_50
+  CATEGORIA_COMPLETA
+  VELOCISTA
+  ESTUDIOSO
+}
+
+model Conquista {
+  id          String          @id @default(cuid())
+  codigo      TipoConquista   @unique
+  nome        String
+  descricao   String
+  icone       String
+  pontos      Int             @default(10)
+  raridade    String          @default("comum")
+  usuarios    UserConquista[]
+}
+
+model UserConquista {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conquistaId String
+  conquista   Conquista @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
+  desbloqueadaEm DateTime @default(now())
+
+  @@unique([userId, conquistaId])
+  @@index([userId])
+}
