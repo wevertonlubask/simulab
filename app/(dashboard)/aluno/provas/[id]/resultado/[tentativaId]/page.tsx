@@ -28,6 +28,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { TipoQuestao } from "@prisma/client";
+import { CertificadoDownloadCard } from "@/components/certificado/CertificadoDownloadCard";
 
 export const metadata: Metadata = {
   title: "Resultado da Prova",
@@ -184,11 +185,56 @@ export default async function ResultadoProvaPage({
       }
 
       case "ASSOCIACAO": {
+        // Verificar novo formato (conexoes)
+        const conexoes = respostaData.conexoes as Array<{ de: string; para: string }>;
+        if (conexoes && Array.isArray(conexoes)) {
+          if (conexoes.length === 0) return "Não associado";
+          const config = questao.configuracao as {
+            colunaA?: { id: string; texto: string }[];
+            colunaB?: { id: string; texto: string }[];
+          } | null;
+          if (!config) {
+            return conexoes.map((c) => `${c.de} → ${c.para}`).join(", ");
+          }
+          return conexoes
+            .map((c) => {
+              const itemA = config.colunaA?.find((i) => i.id === c.de);
+              const itemB = config.colunaB?.find((i) => i.id === c.para);
+              const indexA = config.colunaA?.findIndex((i) => i.id === c.de) ?? -1;
+              const indexB = config.colunaB?.findIndex((i) => i.id === c.para) ?? -1;
+              return `${indexA + 1}. ${itemA?.texto || c.de} → ${String.fromCharCode(65 + indexB)}. ${itemB?.texto || c.para}`;
+            })
+            .join(" | ");
+        }
+
+        // Formato legado (associacoes)
         const associacoes = respostaData.associacoes as Record<string, string>;
         if (!associacoes) return "Não associado";
         return Object.entries(associacoes)
           .map(([esq, dir]) => `${esq} → ${dir}`)
           .join(", ");
+      }
+
+      case "DRAG_DROP": {
+        const posicoes = respostaData.posicoes as Record<string, string[]>;
+        if (!posicoes) return "Não posicionado";
+        const config = questao.configuracao as {
+          itens?: { id: string; texto: string }[];
+          zonas?: { id: string; label: string }[];
+        } | null;
+        if (!config) return "Configuração não encontrada";
+
+        return Object.entries(posicoes)
+          .filter(([zonaId, itens]) => itens.length > 0)
+          .map(([zonaId, itensIds]) => {
+            const zona = config.zonas?.find((z) => z.id === zonaId);
+            const itensTexto = itensIds
+              .map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
+              .filter(Boolean)
+              .join(", ");
+            return `${zona?.label || zonaId}: ${itensTexto}`;
+          })
+          .join(" | ");
       }
 
       default:
@@ -221,8 +267,46 @@ export default async function ResultadoProvaPage({
 
       case "LACUNA":
       case "COMANDO":
-      case "ASSOCIACAO":
         return "Veja a explicação abaixo";
+
+      case "ASSOCIACAO": {
+        const config = questao.configuracao as {
+          colunaA?: { id: string; texto: string }[];
+          colunaB?: { id: string; texto: string }[];
+          conexoesCorretas?: Array<{ de: string; para: string }>;
+        } | null;
+
+        if (!config || !config.conexoesCorretas) {
+          return "Veja a explicação abaixo";
+        }
+
+        return config.conexoesCorretas
+          .map((c) => {
+            const indexA = config.colunaA?.findIndex((i) => i.id === c.de) ?? -1;
+            const indexB = config.colunaB?.findIndex((i) => i.id === c.para) ?? -1;
+            return `${indexA + 1} → ${String.fromCharCode(65 + indexB)}`;
+          })
+          .join(" | ");
+      }
+
+      case "DRAG_DROP": {
+        const config = questao.configuracao as {
+          itens?: { id: string; texto: string }[];
+          zonas?: { id: string; label: string; itensCorretos?: string[] }[];
+        } | null;
+        if (!config || !config.zonas) return "Configuração não encontrada";
+
+        return config.zonas
+          .filter((zona) => zona.itensCorretos && zona.itensCorretos.length > 0)
+          .map((zona) => {
+            const itensTexto = zona.itensCorretos
+              ?.map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
+              .filter(Boolean)
+              .join(", ");
+            return `${zona.label}: ${itensTexto}`;
+          })
+          .join(" | ");
+      }
 
       default:
         return "Não disponível";
@@ -304,6 +388,12 @@ export default async function ResultadoProvaPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Certificado */}
+      <CertificadoDownloadCard
+        tentativaId={tentativaId}
+        aprovado={aprovado}
+      />
 
       {/* Estatísticas */}
       <div className="grid gap-4 md:grid-cols-4">

@@ -29,6 +29,7 @@ model User {
   tentativas    Tentativa[]     @relation("AlunoTentativas")
   notificacoes  Notificacao[]
   conquistas    UserConquista[]
+  certificados  Certificado[]   @relation("AlunoCertificados")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 }
@@ -260,6 +261,7 @@ model Tentativa {
   totalQuestoes Int
   status        StatusTentativa @default(EM_ANDAMENTO)
   respostas     Resposta[]
+  certificado   Certificado?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -353,4 +355,26 @@ model UserConquista {
 
   @@unique([userId, conquistaId])
   @@index([userId])
+}
+
+// CERTIFICADOS
+
+model Certificado {
+  id            String    @id @default(cuid())
+  codigo        String    @unique // Código único para validação
+  alunoId       String
+  aluno         User      @relation("AlunoCertificados", fields: [alunoId], references: [id], onDelete: Cascade)
+  tentativaId   String    @unique
+  tentativa     Tentativa @relation(fields: [tentativaId], references: [id], onDelete: Cascade)
+  titulo        String    // Nome do simulado/prova
+  categoria     String    // Categoria do simulado
+  nota          Float     // Nota obtida
+  notaMinima    Float     // Nota mínima para aprovação
+  dataEmissao   DateTime  @default(now())
+  dataValidade  DateTime? // Opcional: certificado pode expirar
+  metadata      Json?     // Dados adicionais (carga horária, etc.)
+  createdAt     DateTime  @default(now())
+
+  @@index([alunoId])
+  @@index([codigo])
 }

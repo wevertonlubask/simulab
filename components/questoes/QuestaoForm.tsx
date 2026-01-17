@@ -18,11 +18,23 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { AlternativaEditor } from "./AlternativaEditor";
+import { DragDropEditor } from "./tipos/DragDropEditor";
+import { AssociacaoEditor } from "./tipos/AssociacaoEditor";
+import { OrdenacaoEditor } from "./tipos/OrdenacaoEditor";
+import { LacunaEditor } from "./tipos/LacunaEditor";
+import { ComandoEditor } from "./tipos/ComandoEditor";
+import { HotspotEditor } from "./tipos/HotspotEditor";
 import { useToast } from "@/hooks/use-toast";
 import {
   questaoSchema,
   type QuestaoFormData,
   type AlternativaFormData,
+  type DragDropConfig,
+  type AssociacaoConfig,
+  type OrdenacaoConfig,
+  type LacunaConfig,
+  type ComandoConfig,
+  type HotspotConfig,
 } from "@/lib/validations/questao";
 import { Loader2, X } from "lucide-react";
 import type { Questao, Alternativa, TipoQuestao, Dificuldade } from "@prisma/client";
@@ -44,10 +56,71 @@ const defaultAlternativas: AlternativaFormData[] = [
   { texto: "", correta: false, ordem: 3 },
 ];
 
+const defaultDragDropConfig: DragDropConfig = {
+  itens: [],
+  zonas: [],
+  pontuacaoParcial: true,
+  layoutZonas: "horizontal",
+};
+
+const defaultAssociacaoConfig: AssociacaoConfig = {
+  colunaA: [],
+  colunaB: [],
+  conexoesCorretas: [],
+  pontuacaoParcial: true,
+  permitirMultiplasConexoes: false,
+};
+
+const defaultOrdenacaoConfig: OrdenacaoConfig = {
+  instrucao: "",
+  itens: [],
+  pontuacaoParcial: true,
+};
+
+const defaultLacunaConfig: LacunaConfig = {
+  texto: "",
+  lacunas: [],
+  caseSensitive: false,
+  pontuacaoParcial: true,
+};
+
+const defaultComandoConfig: ComandoConfig = {
+  prompt: "$",
+  contexto: "",
+  respostasAceitas: [],
+  caseSensitive: true,
+  ignorarEspacosExtras: true,
+};
+
+const defaultHotspotConfig: HotspotConfig = {
+  imagemUrl: "",
+  instrucao: "",
+  areas: [],
+  multiplosCliques: false,
+};
+
 export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<string[]>(questao?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [dragDropConfig, setDragDropConfig] = useState<DragDropConfig>(
+    (questao?.configuracao as DragDropConfig) || defaultDragDropConfig
+  );
+  const [associacaoConfig, setAssociacaoConfig] = useState<AssociacaoConfig>(
+    (questao?.configuracao as AssociacaoConfig) || defaultAssociacaoConfig
+  );
+  const [ordenacaoConfig, setOrdenacaoConfig] = useState<OrdenacaoConfig>(
+    (questao?.configuracao as OrdenacaoConfig) || defaultOrdenacaoConfig
+  );
+  const [lacunaConfig, setLacunaConfig] = useState<LacunaConfig>(
+    (questao?.configuracao as LacunaConfig) || defaultLacunaConfig
+  );
+  const [comandoConfig, setComandoConfig] = useState<ComandoConfig>(
+    (questao?.configuracao as ComandoConfig) || defaultComandoConfig
+  );
+  const [hotspotConfig, setHotspotConfig] = useState<HotspotConfig>(
+    (questao?.configuracao as HotspotConfig) || defaultHotspotConfig
+  );
   const router = useRouter();
   const { toast } = useToast();
 
@@ -79,6 +152,15 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
 
   const tipo = watch("tipo");
   const alternativas = watch("alternativas");
+
+  const isMultiplaEscolha =
+    tipo === "MULTIPLA_ESCOLHA_UNICA" || tipo === "MULTIPLA_ESCOLHA_MULTIPLA";
+  const isDragDrop = tipo === "DRAG_DROP";
+  const isAssociacao = tipo === "ASSOCIACAO";
+  const isOrdenacao = tipo === "ORDENACAO";
+  const isLacuna = tipo === "LACUNA";
+  const isComando = tipo === "COMANDO";
+  const isHotspot = tipo === "HOTSPOT";
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
@@ -113,10 +195,34 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
           : `/api/questoes/${questao?.id}`;
       const method = mode === "create" ? "POST" : "PUT";
 
+      // Preparar dados com configuração para tipos avançados
+      let configuracao = null;
+      if (data.tipo === "DRAG_DROP") {
+        configuracao = dragDropConfig;
+      } else if (data.tipo === "ASSOCIACAO") {
+        configuracao = associacaoConfig;
+      } else if (data.tipo === "ORDENACAO") {
+        configuracao = ordenacaoConfig;
+      } else if (data.tipo === "LACUNA") {
+        configuracao = lacunaConfig;
+      } else if (data.tipo === "COMANDO") {
+        configuracao = comandoConfig;
+      } else if (data.tipo === "HOTSPOT") {
+        configuracao = hotspotConfig;
+      }
+
+      const submitData = {
+        ...data,
+        tags,
+        configuracao,
+        // Para tipos avançados, alternativas não são necessárias
+        alternativas: isMultiplaEscolha ? data.alternativas : [],
+      };
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, tags }),
+        body: JSON.stringify(submitData),
       });
 
       const result = await response.json();
@@ -189,9 +295,6 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
     });
   };
 
-  const isMultiplaEscolha =
-    tipo === "MULTIPLA_ESCOLHA_UNICA" || tipo === "MULTIPLA_ESCOLHA_MULTIPLA";
-
   return (
     <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
@@ -217,6 +320,24 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
                   </SelectItem>
                   <SelectItem value="MULTIPLA_ESCOLHA_MULTIPLA">
                     Múltipla Escolha (Múltipla)
+                  </SelectItem>
+                  <SelectItem value="DRAG_DROP">
+                    Arrastar e Soltar (Drag & Drop)
+                  </SelectItem>
+                  <SelectItem value="ASSOCIACAO">
+                    Associação / Ligação
+                  </SelectItem>
+                  <SelectItem value="ORDENACAO">
+                    Ordenação
+                  </SelectItem>
+                  <SelectItem value="LACUNA">
+                    Preencher Lacunas
+                  </SelectItem>
+                  <SelectItem value="COMANDO">
+                    Comando / Terminal
+                  </SelectItem>
+                  <SelectItem value="HOTSPOT">
+                    Hotspot (Clique na Imagem)
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -334,7 +455,7 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
         </Card>
       </div>
 
-      {/* Alternativas */}
+      {/* Alternativas - Múltipla Escolha */}
       {isMultiplaEscolha && (
         <Card>
           <CardHeader>
@@ -342,7 +463,7 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
           </CardHeader>
           <CardContent>
             <AlternativaEditor
-              alternativas={alternativas}
+              alternativas={alternativas || []}
               tipo={tipo as "MULTIPLA_ESCOLHA_UNICA" | "MULTIPLA_ESCOLHA_MULTIPLA"}
               onChange={(alts) => setValue("alternativas", alts)}
               disabled={isLoading}
@@ -352,6 +473,102 @@ export function QuestaoForm({ simuladoId, questao, mode }: QuestaoFormProps) {
                 {errors.alternativas.message}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Drag and Drop */}
+      {isDragDrop && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração Drag & Drop</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DragDropEditor
+              value={dragDropConfig}
+              onChange={setDragDropConfig}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Associação */}
+      {isAssociacao && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração de Associação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AssociacaoEditor
+              value={associacaoConfig}
+              onChange={setAssociacaoConfig}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Ordenação */}
+      {isOrdenacao && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração de Ordenação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <OrdenacaoEditor
+              value={ordenacaoConfig}
+              onChange={setOrdenacaoConfig}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Lacuna */}
+      {isLacuna && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração de Lacunas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LacunaEditor
+              value={lacunaConfig}
+              onChange={setLacunaConfig}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Comando */}
+      {isComando && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração de Comando</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ComandoEditor
+              value={comandoConfig}
+              onChange={setComandoConfig}
+              disabled={isLoading}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor Hotspot */}
+      {isHotspot && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuração de Hotspot</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HotspotEditor
+              value={hotspotConfig}
+              onChange={setHotspotConfig}
+              disabled={isLoading}
+            />
           </CardContent>
         </Card>
       )}

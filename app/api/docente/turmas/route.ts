@@ -12,7 +12,7 @@ export async function GET() {
         id: true,
         nome: true,
         codigo: true,
-        ativo: true,
+        ativa: true,
         _count: {
           select: {
             alunos: true,

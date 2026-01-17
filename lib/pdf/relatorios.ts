@@ -153,7 +153,7 @@ export function gerarRelatorioGeralPDF(data: RelatorioGeralData): void {
   });
 
   // Rodapé
-  const pageCount = doc.getNumberOfPages();
+  const pageCount = (doc as jsPDF & { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -268,14 +268,23 @@ export function gerarRelatorioProvaPDF(data: RelatorioProvaData): void {
     styles: { fontSize: 9 },
     columnStyles: {
       4: {
-        textColor: (rowIndex: number) =>
-          data.ranking[rowIndex]?.aprovado ? [34, 197, 94] : [239, 68, 68],
-      } as unknown as { textColor: number[] },
+        textColor: [100, 100, 100] as [number, number, number],
+      },
+    },
+    didParseCell: function(hookData) {
+      if (hookData.section === 'body' && hookData.column.index === 4) {
+        const rowIndex = hookData.row.index;
+        if (data.ranking[rowIndex]?.aprovado) {
+          hookData.cell.styles.textColor = [34, 197, 94] as [number, number, number];
+        } else {
+          hookData.cell.styles.textColor = [239, 68, 68] as [number, number, number];
+        }
+      }
     },
   });
 
   // Rodapé
-  const pageCount = doc.getNumberOfPages();
+  const pageCount = (doc as jsPDF & { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -363,7 +372,7 @@ export function gerarRelatorioTurmaPDF(data: RelatorioTurmaData): void {
   });
 
   // Rodapé
-  const pageCount = doc.getNumberOfPages();
+  const pageCount = (doc as jsPDF & { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);

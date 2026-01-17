@@ -11,6 +11,13 @@ import { QuestaoOrdenacao } from "./QuestaoOrdenacao";
 import { QuestaoLacuna } from "./QuestaoLacuna";
 import { QuestaoComando } from "./QuestaoComando";
 import { QuestaoAssociacao } from "./QuestaoAssociacao";
+import { DragDropDisplay, type DragDropResposta } from "@/components/questoes/tipos/DragDropDisplay";
+import { AssociacaoDisplay, type AssociacaoResposta } from "@/components/questoes/tipos/AssociacaoDisplay";
+import { OrdenacaoDisplay, type OrdenacaoResposta } from "@/components/questoes/tipos/OrdenacaoDisplay";
+import { LacunaDisplay, type LacunaResposta } from "@/components/questoes/tipos/LacunaDisplay";
+import { ComandoDisplay, type ComandoResposta } from "@/components/questoes/tipos/ComandoDisplay";
+import { HotspotDisplay, type HotspotResposta } from "@/components/questoes/tipos/HotspotDisplay";
+import type { DragDropConfig, AssociacaoConfig, OrdenacaoConfig, LacunaConfig, ComandoConfig, HotspotConfig } from "@/lib/validations/questao";
 import type { TipoQuestao } from "@prisma/client";
 
 interface Alternativa {
@@ -120,7 +127,26 @@ export function QuestaoContainer({
           />
         );
 
-      case "ORDENACAO":
+      case "ORDENACAO": {
+        const ordenacaoConfig = questao.configuracao as OrdenacaoConfig | null;
+
+        // Verificar se usa o novo formato (itens com ordem)
+        if (ordenacaoConfig && "itens" in ordenacaoConfig && Array.isArray(ordenacaoConfig.itens)) {
+          const ordenacaoResposta: OrdenacaoResposta =
+            respostaAtual && typeof respostaAtual === "object" && "ordem" in respostaAtual
+              ? (respostaAtual as unknown as OrdenacaoResposta)
+              : { ordem: [] };
+          return (
+            <OrdenacaoDisplay
+              config={ordenacaoConfig}
+              value={ordenacaoResposta}
+              onChange={(value) => handleRespostaChange(value)}
+              disabled={disabled}
+            />
+          );
+        }
+
+        // Fallback para formato antigo (usando alternativas)
         return (
           <QuestaoOrdenacao
             itens={questao.alternativas}
@@ -129,8 +155,28 @@ export function QuestaoContainer({
             disabled={disabled}
           />
         );
+      }
 
-      case "LACUNA":
+      case "LACUNA": {
+        const lacunaConfig = questao.configuracao as LacunaConfig | null;
+
+        // Verificar se usa o novo formato (texto com lacunas)
+        if (lacunaConfig && "texto" in lacunaConfig && "lacunas" in lacunaConfig) {
+          const lacunaResposta: LacunaResposta =
+            respostaAtual && typeof respostaAtual === "object" && "respostas" in respostaAtual
+              ? (respostaAtual as unknown as LacunaResposta)
+              : { respostas: {} };
+          return (
+            <LacunaDisplay
+              config={lacunaConfig}
+              value={lacunaResposta}
+              onChange={(value) => handleRespostaChange(value)}
+              disabled={disabled}
+            />
+          );
+        }
+
+        // Fallback para formato antigo (usando enunciado)
         return (
           <QuestaoLacuna
             enunciado={questao.enunciado}
@@ -139,8 +185,28 @@ export function QuestaoContainer({
             disabled={disabled}
           />
         );
+      }
 
-      case "COMANDO":
+      case "COMANDO": {
+        const comandoConfig = questao.configuracao as ComandoConfig | null;
+
+        // Verificar se usa o novo formato (prompt, contexto, respostasAceitas)
+        if (comandoConfig && "prompt" in comandoConfig && "respostasAceitas" in comandoConfig) {
+          const comandoResposta: ComandoResposta =
+            respostaAtual && typeof respostaAtual === "object" && "comando" in respostaAtual
+              ? (respostaAtual as unknown as ComandoResposta)
+              : { comando: "" };
+          return (
+            <ComandoDisplay
+              config={comandoConfig}
+              value={comandoResposta}
+              onChange={(value) => handleRespostaChange(value)}
+              disabled={disabled}
+            />
+          );
+        }
+
+        // Fallback para formato antigo
         return (
           <QuestaoComando
             respostaAtual={respostaAtual as { comando?: string } | null}
@@ -148,18 +214,84 @@ export function QuestaoContainer({
             disabled={disabled}
           />
         );
+      }
 
       case "ASSOCIACAO": {
-        const config = questao.configuracao as {
+        const config = questao.configuracao as AssociacaoConfig | null;
+
+        // Verificar se usa o novo formato (colunaA/colunaB)
+        if (config && "colunaA" in config && "colunaB" in config) {
+          const associacaoResposta: AssociacaoResposta =
+            respostaAtual && typeof respostaAtual === "object" && "conexoes" in respostaAtual
+              ? (respostaAtual as unknown as AssociacaoResposta)
+              : { conexoes: [] };
+          return (
+            <AssociacaoDisplay
+              config={config}
+              value={associacaoResposta}
+              onChange={(value) => handleRespostaChange(value)}
+              disabled={disabled}
+            />
+          );
+        }
+
+        // Fallback para formato antigo (itensEsquerda/itensDireita)
+        const legacyConfig = questao.configuracao as {
           itensEsquerda?: { id: string; texto: string }[];
           itensDireita?: { id: string; texto: string }[];
         } | null;
         return (
           <QuestaoAssociacao
-            itensEsquerda={config?.itensEsquerda || []}
-            itensDireita={config?.itensDireita || []}
+            itensEsquerda={legacyConfig?.itensEsquerda || []}
+            itensDireita={legacyConfig?.itensDireita || []}
             respostaAtual={respostaAtual as { associacoes?: Record<string, string> } | null}
             onChange={handleRespostaChange}
+            disabled={disabled}
+          />
+        );
+      }
+
+      case "DRAG_DROP": {
+        const dragDropConfig = questao.configuracao as DragDropConfig | null;
+        if (!dragDropConfig) {
+          return (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Configuração de Drag & Drop não encontrada.</p>
+            </div>
+          );
+        }
+        const dragDropResposta: DragDropResposta =
+          respostaAtual && typeof respostaAtual === "object" && "posicoes" in respostaAtual
+            ? (respostaAtual as unknown as DragDropResposta)
+            : { posicoes: {} };
+        return (
+          <DragDropDisplay
+            config={dragDropConfig}
+            value={dragDropResposta}
+            onChange={(value) => handleRespostaChange(value)}
+            disabled={disabled}
+          />
+        );
+      }
+
+      case "HOTSPOT": {
+        const hotspotConfig = questao.configuracao as HotspotConfig | null;
+        if (!hotspotConfig) {
+          return (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Configuração de Hotspot não encontrada.</p>
+            </div>
+          );
+        }
+        const hotspotResposta: HotspotResposta =
+          respostaAtual && typeof respostaAtual === "object" && "cliques" in respostaAtual
+            ? (respostaAtual as unknown as HotspotResposta)
+            : { cliques: [] };
+        return (
+          <HotspotDisplay
+            config={hotspotConfig}
+            value={hotspotResposta}
+            onChange={(value) => handleRespostaChange(value)}
             disabled={disabled}
           />
         );
