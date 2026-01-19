@@ -95,16 +95,74 @@ export async function PUT(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
-    // Cannot edit published or closed provas
-    if (existingProva.status !== "RASCUNHO") {
+    const body = await request.json();
+    const validatedData = provaConfigSchema.parse(body);
+
+    const prova = await db.prova.update({
+      where: { id },
+      data: validatedData,
+      include: {
+        _count: {
+          select: {
+            questoes: true,
+            tentativas: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(prova);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Só é possível editar provas em rascunho" },
+        { error: error.errors[0].message },
         { status: 400 }
       );
     }
 
+    console.error("Error updating prova:", error);
+    return NextResponse.json(
+      { error: "Erro ao atualizar prova" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/provas/[id] - Atualizar configurações da prova (parcial)
+export async function PATCH(request: Request, { params }: RouteParams) {
+  try {
+    const session = await auth();
+    const { id } = await params;
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const existingProva = await db.prova.findUnique({
+      where: { id },
+      include: {
+        simulado: {
+          select: { docenteId: true },
+        },
+      },
+    });
+
+    if (!existingProva) {
+      return NextResponse.json(
+        { error: "Prova não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    if (
+      existingProva.simulado.docenteId !== session.user.id &&
+      session.user.role !== "SUPERADMIN"
+    ) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
     const body = await request.json();
-    const validatedData = provaConfigSchema.parse(body);
+    const validatedData = provaConfigSchema.partial().parse(body);
 
     const prova = await db.prova.update({
       where: { id },

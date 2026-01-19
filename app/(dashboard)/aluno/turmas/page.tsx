@@ -1,10 +1,12 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EntrarTurmaForm } from "@/components/aluno/EntrarTurmaForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, ClipboardList, Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, ClipboardList, Calendar, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -78,16 +80,16 @@ export default async function AlunoTurmasPage() {
           <h2 className="text-xl font-semibold">Turmas Ativas</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {turmasAtivas.map((ta) => (
-              <Card key={ta.id}>
+              <Card key={ta.id} className="flex flex-col">
                 <CardHeader>
                   <CardTitle className="text-lg">{ta.turma.nome}</CardTitle>
                   {ta.turma.descricao && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground line-clamp-2">
                       {ta.turma.descricao}
                     </p>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 flex-1">
                   <div className="text-sm text-muted-foreground">
                     Professor: {ta.turma.docente.nome}
                   </div>
@@ -111,6 +113,14 @@ export default async function AlunoTurmasPage() {
                     })}
                   </div>
                 </CardContent>
+                <div className="p-4 pt-0">
+                  <Button asChild className="w-full" variant="outline">
+                    <Link href={`/aluno/turmas/${ta.turma.id}`}>
+                      Ver Provas
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>
@@ -125,18 +135,26 @@ export default async function AlunoTurmasPage() {
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {turmasInativas.map((ta) => (
-              <Card key={ta.id} className="opacity-60">
+              <Card key={ta.id} className="opacity-70 flex flex-col">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{ta.turma.nome}</CardTitle>
                     <Badge variant="secondary">Inativa</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 flex-1">
                   <div className="text-sm text-muted-foreground">
                     Professor: {ta.turma.docente.nome}
                   </div>
                 </CardContent>
+                <div className="p-4 pt-0">
+                  <Button asChild className="w-full" variant="ghost" size="sm">
+                    <Link href={`/aluno/turmas/${ta.turma.id}`}>
+                      Ver Histórico
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>

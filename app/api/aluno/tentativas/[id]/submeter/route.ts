@@ -283,47 +283,84 @@ function avaliarResposta(
     }
 
     case "HOTSPOT": {
-      // resposta = { x: number, y: number }
+      // resposta = { cliques: [{ x, y, areaId }] }
       const configObj = configuracao as {
-        areas?: { x: number; y: number; width: number; height: number }[]
+        areas?: { id: string; x: number; y: number; largura: number; altura: number; correta: boolean }[];
+        multiplosCliques?: boolean;
       };
-      const respostaObj = resposta as { x?: number; y?: number };
+      const respostaObj = resposta as { cliques?: { x: number; y: number; areaId?: string }[] };
 
-      if (!configObj?.areas || respostaObj.x === undefined || respostaObj.y === undefined) {
+      if (!configObj?.areas || !respostaObj?.cliques || respostaObj.cliques.length === 0) {
         return { correta: false, pontuacao: 0 };
       }
 
-      const dentroDeAlgumaArea = configObj.areas.some(
-        (area) =>
-          respostaObj.x! >= area.x &&
-          respostaObj.x! <= area.x + area.width &&
-          respostaObj.y! >= area.y &&
-          respostaObj.y! <= area.y + area.height
+      const areasCorretas = configObj.areas.filter((a) => a.correta);
+      const areasIncorretas = configObj.areas.filter((a) => !a.correta);
+
+      // Verificar quais áreas corretas foram clicadas
+      const areasCorretasClicadas = areasCorretas.filter((area) =>
+        respostaObj.cliques!.some((clique) => clique.areaId === area.id)
       );
 
-      return { correta: dentroDeAlgumaArea, pontuacao: dentroDeAlgumaArea ? 1 : 0 };
+      // Verificar se clicou em alguma área incorreta
+      const clicouEmAreaIncorreta = areasIncorretas.some((area) =>
+        respostaObj.cliques!.some((clique) => clique.areaId === area.id)
+      );
+
+      // Verificar cliques fora de qualquer área
+      const cliquesForaDasAreas = respostaObj.cliques.filter((c) => !c.areaId).length;
+
+      // Calcular pontuação
+      const acertos = areasCorretasClicadas.length;
+      const erros = clicouEmAreaIncorreta ? 1 : 0;
+
+      // Considera correto se acertou todas as áreas corretas e não errou nenhuma
+      const todasCorretas = acertos === areasCorretas.length && !clicouEmAreaIncorreta && cliquesForaDasAreas === 0;
+
+      // Pontuação parcial baseada em acertos
+      const pontuacao = areasCorretas.length > 0
+        ? Math.max(0, (acertos - erros - cliquesForaDasAreas) / areasCorretas.length)
+        : 0;
+
+      return { correta: todasCorretas, pontuacao: todasCorretas ? 1 : pontuacao };
     }
 
     case "COMANDO": {
       // resposta = { comando: "texto do comando" }
       const respostaObj = resposta as { comando?: string };
       const configObj = configuracao as {
-        comandosCorretos?: string[];
+        respostasAceitas?: string[];
         caseSensitive?: boolean;
+        ignorarEspacosExtras?: boolean;
       };
 
-      if (!configObj?.comandosCorretos || !respostaObj.comando) {
+      if (!configObj?.respostasAceitas || !respostaObj.comando) {
         return { correta: false, pontuacao: 0 };
       }
 
-      const comandoResposta = configObj.caseSensitive
-        ? respostaObj.comando.trim()
-        : respostaObj.comando.trim().toLowerCase();
+      let comandoResposta = respostaObj.comando.trim();
 
-      const correta = configObj.comandosCorretos.some((cmd) => {
-        const cmdComparar = configObj.caseSensitive
-          ? cmd.trim()
-          : cmd.trim().toLowerCase();
+      // Normalizar espaços extras se configurado
+      if (configObj.ignorarEspacosExtras) {
+        comandoResposta = comandoResposta.replace(/\s+/g, ' ');
+      }
+
+      // Converter para minúsculas se não for case sensitive
+      if (!configObj.caseSensitive) {
+        comandoResposta = comandoResposta.toLowerCase();
+      }
+
+      const correta = configObj.respostasAceitas.some((cmd) => {
+        let cmdComparar = cmd.trim();
+
+        if (configObj.ignorarEspacosExtras) {
+          cmdComparar = cmdComparar.replace(/\s+/g, ' ');
+        }
+
+        if (!configObj.caseSensitive) {
+          cmdComparar = cmdComparar.toLowerCase();
+        }
+
         return comandoResposta === cmdComparar;
       });
 

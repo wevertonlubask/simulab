@@ -103,10 +103,11 @@ export default async function AlunoProvasPage() {
 
       const provaTentativas = tentativasPorProva[tp.prova.id] || [];
       const tentativasRealizadas = provaTentativas.length;
-      const tentativasRestantes = Math.max(
-        0,
-        tp.prova.tentativasMax - tentativasRealizadas
-      );
+      // null = tentativas ilimitadas
+      const tentativasIlimitadas = tp.prova.tentativasMax === null;
+      const tentativasRestantes = tentativasIlimitadas
+        ? Infinity
+        : Math.max(0, tp.prova.tentativasMax - tentativasRealizadas);
       const melhorNota = provaTentativas.reduce((max, t) => {
         if (t.nota !== null && t.nota > max) return t.nota;
         return max;
@@ -120,6 +121,7 @@ export default async function AlunoProvasPage() {
         disponivel,
         tentativasRealizadas,
         tentativasRestantes,
+        tentativasIlimitadas,
         melhorNota,
         temTentativaEmAndamento,
       });
@@ -129,6 +131,7 @@ export default async function AlunoProvasPage() {
     disponivel: boolean;
     tentativasRealizadas: number;
     tentativasRestantes: number;
+    tentativasIlimitadas: boolean;
     melhorNota: number;
     temTentativaEmAndamento: boolean;
   })[]);
@@ -230,8 +233,9 @@ export default async function AlunoProvasPage() {
 
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
-                          {tp.tentativasRealizadas} de {tp.prova.tentativasMax}{" "}
-                          tentativas
+                          {tp.tentativasIlimitadas
+                            ? `${tp.tentativasRealizadas} de tentativas`
+                            : `${tp.tentativasRealizadas} de ${tp.prova.tentativasMax} tentativas`}
                         </span>
                         {tp.melhorNota >= tp.prova.notaMinima && (
                           <Badge variant="outline" className="text-green-600">
@@ -248,7 +252,7 @@ export default async function AlunoProvasPage() {
                               Continuar Prova
                             </Link>
                           </Button>
-                        ) : tp.tentativasRestantes > 0 ? (
+                        ) : tp.tentativasIlimitadas || tp.tentativasRestantes > 0 ? (
                           <Button className="w-full" asChild>
                             <Link href={`/aluno/provas/${tp.prova.id}`}>
                               {tp.tentativasRealizadas > 0

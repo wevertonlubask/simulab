@@ -109,6 +109,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
     const updateData: Record<string, unknown> = { ...validatedData };
     delete updateData.alternativas;
 
+    // Incluir configuração do body original (para tipos avançados)
+    if (body.configuracao !== undefined) {
+      updateData.configuracao = body.configuracao;
+    }
+
     const questao = await db.questao.update({
       where: { id },
       data: updateData,

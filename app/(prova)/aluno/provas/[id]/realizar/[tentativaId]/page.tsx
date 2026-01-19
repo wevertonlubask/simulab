@@ -239,15 +239,15 @@ export default function RealizarProvaPage({ params }: PageProps) {
   const questoesNaoRespondidas = data.questoes.length - questoesRespondidas;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 border-b bg-card">
-        <div className="flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
+        <div className="flex min-h-14 items-center justify-between px-2 sm:px-4 py-2 gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             {/* Menu mobile */}
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden">
+                <Button variant="ghost" size="icon" className="lg:hidden flex-shrink-0 h-8 w-8">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -268,20 +268,20 @@ export default function RealizarProvaPage({ params }: PageProps) {
               </SheetContent>
             </Sheet>
 
-            <div>
-              <h1 className="font-semibold">{data.prova.nome}</h1>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
+            <div className="min-w-0 flex-1">
+              <h1 className="font-semibold text-sm sm:text-base truncate">{data.prova.nome}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="text-xs flex-shrink-0">
                   {data.prova.simulado.categoria}
                 </Badge>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
                   Tentativa {data.tentativa.numero}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-2 md:gap-4 flex-shrink-0">
             {/* Timer */}
             {data.tempoRestante !== null && (
               <ProvaTimer
@@ -290,8 +290,8 @@ export default function RealizarProvaPage({ params }: PageProps) {
               />
             )}
 
-            {/* Status */}
-            <div className="hidden sm:flex items-center gap-4 text-sm text-muted-foreground">
+            {/* Status - hidden on small screens */}
+            <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground">
               <span>
                 {questoesRespondidas}/{data.totalQuestoes} respondidas
               </span>
@@ -307,7 +307,7 @@ export default function RealizarProvaPage({ params }: PageProps) {
               variant="outline"
               size="sm"
               onClick={() => setShowExitDialog(true)}
-              className="gap-2"
+              className="gap-1 h-8 px-2 sm:px-3"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sair</span>
@@ -316,7 +316,7 @@ export default function RealizarProvaPage({ params }: PageProps) {
             <Button
               size="sm"
               onClick={() => setShowSubmitDialog(true)}
-              className="gap-2"
+              className="gap-1 h-8 px-2 sm:px-3"
             >
               <Send className="h-4 w-4" />
               <span className="hidden sm:inline">Enviar Prova</span>
@@ -326,9 +326,9 @@ export default function RealizarProvaPage({ params }: PageProps) {
       </header>
 
       {/* Content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar (desktop) */}
-        <aside className="hidden lg:flex w-72 flex-col border-r bg-card p-4">
+        <aside className="hidden lg:flex w-72 flex-col border-r bg-card p-4 overflow-y-auto">
           <QuestaoNavegacao
             questoes={questoesComStatus}
             questaoAtual={questaoAtual}
@@ -337,7 +337,7 @@ export default function RealizarProvaPage({ params }: PageProps) {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden p-4">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden p-2 sm:p-4">
           <QuestaoContainer
             questao={{
               ...questaoAtualData,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogContentNoTransform,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -15,6 +16,35 @@ import { DificuldadeBadge } from "./DificuldadeBadge";
 import { TipoQuestaoBadge } from "./TipoQuestaoBadge";
 import { CheckCircle, XCircle } from "lucide-react";
 import type { Questao, Alternativa } from "@prisma/client";
+
+// Importar componentes de display para tipos avançados
+import { DragDropDisplay, type DragDropResposta } from "./tipos/DragDropDisplay";
+import { AssociacaoDisplay, type AssociacaoResposta } from "./tipos/AssociacaoDisplay";
+import { OrdenacaoDisplay, type OrdenacaoResposta } from "./tipos/OrdenacaoDisplay";
+import { LacunaDisplay, type LacunaResposta } from "./tipos/LacunaDisplay";
+import { HotspotDisplay, type HotspotResposta } from "./tipos/HotspotDisplay";
+import { ComandoDisplay, type ComandoResposta } from "./tipos/ComandoDisplay";
+
+// Importar tipos de configuração
+import type {
+  DragDropConfig,
+  AssociacaoConfig,
+  OrdenacaoConfig,
+  LacunaConfig,
+  HotspotConfig,
+  ComandoConfig,
+} from "@/lib/validations/questao";
+
+// Importar validadores
+import {
+  validateDragDrop,
+  validateAssociacao,
+  validateOrdenacao,
+  validateLacuna,
+  validateHotspot,
+  validateComando,
+  type HotspotResposta as HotspotRespostaValidator,
+} from "@/lib/validations/questoes-avancadas";
 
 interface QuestaoWithAlternativas extends Questao {
   alternativas: Alternativa[];
@@ -35,12 +65,54 @@ export function QuestaoPreviewModal({
   const [selectedMultiple, setSelectedMultiple] = useState<string[]>([]);
   const [showResult, setShowResult] = useState(false);
 
+  // Estados para tipos avançados
+  const [dragDropResposta, setDragDropResposta] = useState<DragDropResposta>({ posicoes: {} });
+  const [associacaoResposta, setAssociacaoResposta] = useState<AssociacaoResposta>({ conexoes: [] });
+  const [ordenacaoResposta, setOrdenacaoResposta] = useState<OrdenacaoResposta>({ ordem: [] });
+  const [lacunaResposta, setLacunaResposta] = useState<LacunaResposta>({ respostas: {} });
+  const [hotspotResposta, setHotspotResposta] = useState<HotspotResposta>({ cliques: [] });
+  const [comandoResposta, setComandoResposta] = useState<ComandoResposta>({ comando: "" });
+  const [advancedResult, setAdvancedResult] = useState<{ correta: boolean; pontuacao: number } | null>(null);
+
   if (!questao) return null;
 
   const isMultiplaUnica = questao.tipo === "MULTIPLA_ESCOLHA_UNICA";
   const isMultiplaMultipla = questao.tipo === "MULTIPLA_ESCOLHA_MULTIPLA";
+  const isDragDrop = questao.tipo === "DRAG_DROP";
+  const isAssociacao = questao.tipo === "ASSOCIACAO";
+  const isOrdenacao = questao.tipo === "ORDENACAO";
+  const isLacuna = questao.tipo === "LACUNA";
+  const isHotspot = questao.tipo === "HOTSPOT";
+  const isComando = questao.tipo === "COMANDO";
+  const isAdvanced = isDragDrop || isAssociacao || isOrdenacao || isLacuna || isHotspot || isComando;
 
   const handleCheck = () => {
+    // Validar tipos avançados
+    if (isAdvanced && questao.configuracao) {
+      let result = { correta: false, pontuacao: 0 };
+
+      if (isDragDrop) {
+        result = validateDragDrop(dragDropResposta, questao.configuracao as DragDropConfig);
+      } else if (isAssociacao) {
+        result = validateAssociacao(associacaoResposta, questao.configuracao as AssociacaoConfig);
+      } else if (isOrdenacao) {
+        result = validateOrdenacao(ordenacaoResposta, questao.configuracao as OrdenacaoConfig);
+      } else if (isLacuna) {
+        result = validateLacuna(lacunaResposta, questao.configuracao as LacunaConfig);
+      } else if (isHotspot) {
+        // Converter formato do HotspotDisplay para o formato do validador
+        const hotspotRespostaConvertida: HotspotRespostaValidator = {
+          areasSelecionadas: hotspotResposta.cliques
+            .filter((c) => c.areaId)
+            .map((c) => c.areaId as string),
+        };
+        result = validateHotspot(hotspotRespostaConvertida, questao.configuracao as HotspotConfig);
+      } else if (isComando) {
+        result = validateComando(comandoResposta, questao.configuracao as ComandoConfig);
+      }
+
+      setAdvancedResult(result);
+    }
     setShowResult(true);
   };
 
@@ -48,6 +120,14 @@ export function QuestaoPreviewModal({
     setSelectedSingle(null);
     setSelectedMultiple([]);
     setShowResult(false);
+    // Reset estados avançados
+    setDragDropResposta({ posicoes: {} });
+    setAssociacaoResposta({ conexoes: [] });
+    setOrdenacaoResposta({ ordem: [] });
+    setLacunaResposta({ respostas: {} });
+    setHotspotResposta({ cliques: [] });
+    setComandoResposta({ comando: "" });
+    setAdvancedResult(null);
   };
 
   const handleClose = () => {
@@ -76,9 +156,14 @@ export function QuestaoPreviewModal({
 
   const letters = ["A", "B", "C", "D", "E", "F"];
 
+  // Usar DialogContentNoTransform para tipos que usam drag and drop
+  // pois o transform do DialogContent quebra o position:fixed do DragOverlay
+  const needsNoTransform = isDragDrop || isAssociacao || isOrdenacao;
+  const ContentComponent = needsNoTransform ? DialogContentNoTransform : DialogContent;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <ContentComponent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Preview da Questão
@@ -208,8 +293,74 @@ export function QuestaoPreviewModal({
             </div>
           )}
 
-          {/* Result */}
-          {showResult && (
+          {/* Drag and Drop */}
+          {isDragDrop && questao.configuracao && (
+            <DragDropDisplay
+              config={questao.configuracao as DragDropConfig}
+              value={dragDropResposta}
+              onChange={setDragDropResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Associação */}
+          {isAssociacao && questao.configuracao && (
+            <AssociacaoDisplay
+              config={questao.configuracao as AssociacaoConfig}
+              value={associacaoResposta}
+              onChange={setAssociacaoResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Ordenação */}
+          {isOrdenacao && questao.configuracao && (
+            <OrdenacaoDisplay
+              config={questao.configuracao as OrdenacaoConfig}
+              value={ordenacaoResposta}
+              onChange={setOrdenacaoResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Lacuna */}
+          {isLacuna && questao.configuracao && (
+            <LacunaDisplay
+              config={questao.configuracao as LacunaConfig}
+              value={lacunaResposta}
+              onChange={setLacunaResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Hotspot */}
+          {isHotspot && questao.configuracao && (
+            <HotspotDisplay
+              config={questao.configuracao as HotspotConfig}
+              value={hotspotResposta}
+              onChange={setHotspotResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Comando */}
+          {isComando && questao.configuracao && (
+            <ComandoDisplay
+              config={questao.configuracao as ComandoConfig}
+              value={comandoResposta}
+              onChange={setComandoResposta}
+              disabled={showResult}
+              showResult={showResult}
+            />
+          )}
+
+          {/* Result - Múltipla Escolha */}
+          {showResult && !isAdvanced && (
             <div
               className={`p-4 rounded-lg ${
                 getResult()
@@ -228,6 +379,32 @@ export function QuestaoPreviewModal({
             </div>
           )}
 
+          {/* Result - Tipos Avançados */}
+          {showResult && isAdvanced && advancedResult && (
+            <div
+              className={`p-4 rounded-lg ${
+                advancedResult.correta
+                  ? "bg-success/10 text-success"
+                  : advancedResult.pontuacao > 0
+                    ? "bg-warning/10 text-warning"
+                    : "bg-destructive/10 text-destructive"
+              }`}
+            >
+              <p className="font-medium">
+                {advancedResult.correta
+                  ? "Resposta correta!"
+                  : advancedResult.pontuacao > 0
+                    ? `Parcialmente correto - ${advancedResult.pontuacao.toFixed(0)}%`
+                    : "Resposta incorreta"}
+              </p>
+              {questao.explicacao && (
+                <p className="mt-2 text-sm text-foreground">
+                  <strong>Explicação:</strong> {questao.explicacao}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-2">
             {!showResult ? (
@@ -236,7 +413,9 @@ export function QuestaoPreviewModal({
                 disabled={
                   isMultiplaUnica
                     ? !selectedSingle
-                    : selectedMultiple.length === 0
+                    : isMultiplaMultipla
+                      ? selectedMultiple.length === 0
+                      : false // Tipos avançados sempre permitem verificar
                 }
               >
                 Verificar Resposta
@@ -248,7 +427,7 @@ export function QuestaoPreviewModal({
             )}
           </div>
         </div>
-      </DialogContent>
+      </ContentComponent>
     </Dialog>
   );
 }

@@ -106,8 +106,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Verificar limite de tentativas
-    if (tentativasExistentes.length >= prova.tentativasMax) {
+    // Verificar limite de tentativas (null = ilimitado)
+    if (prova.tentativasMax !== null && tentativasExistentes.length >= prova.tentativasMax) {
       return NextResponse.json(
         { error: "Você atingiu o limite de tentativas" },
         { status: 403 }

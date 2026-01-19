@@ -307,34 +307,35 @@ export function QuestaoContainer({
   };
 
   return (
-    <Card className="flex-1 flex flex-col">
-      <CardHeader className="flex-shrink-0 border-b">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold">
+    <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <CardHeader className="flex-shrink-0 border-b py-2 sm:py-3 px-3 sm:px-6">
+        <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-sm sm:text-lg font-semibold whitespace-nowrap">
               Questão {indice + 1} de {total}
             </span>
-            <Badge variant="secondary">{getTipoLabel(questao.tipo)}</Badge>
+            <Badge variant="secondary" className="text-xs hidden xs:inline-flex">{getTipoLabel(questao.tipo)}</Badge>
           </div>
           <Button
             variant={marcadaRevisao ? "default" : "outline"}
             size="sm"
             onClick={toggleMarcacao}
             className={cn(
-              "gap-2",
+              "gap-1 sm:gap-2 h-8 text-xs sm:text-sm flex-shrink-0 px-2 sm:px-3",
               marcadaRevisao && "bg-orange-500 hover:bg-orange-600"
             )}
           >
-            <Flag className="h-4 w-4" />
-            {marcadaRevisao ? "Marcada" : "Marcar para revisão"}
+            <Flag className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">{marcadaRevisao ? "Marcada" : "Marcar para revisão"}</span>
+            <span className="sm:hidden">{marcadaRevisao ? "Marcada" : "Revisar"}</span>
           </Button>
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-auto py-6">
+      <CardContent className="flex-1 min-h-0 overflow-y-auto py-3 sm:py-6 px-3 sm:px-6">
         {/* Enunciado */}
         {questao.tipo !== "LACUNA" && (
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6">
             <div
               className="prose prose-sm max-w-none dark:prose-invert"
               dangerouslySetInnerHTML={{ __html: questao.enunciado }}
@@ -353,25 +354,25 @@ export function QuestaoContainer({
         {renderQuestao()}
       </CardContent>
 
-      {/* Navegação */}
-      <div className="flex-shrink-0 border-t p-4">
-        <div className="flex justify-between">
+      {/* Navegação - sempre visível na parte inferior */}
+      <div className="flex-shrink-0 border-t p-2 sm:p-4 bg-card">
+        <div className="flex justify-between gap-2">
           <Button
             variant="outline"
             onClick={onAnterior}
             disabled={!temAnterior}
-            className="gap-2"
+            className="gap-1 sm:gap-2 h-9 px-2 sm:px-4 text-sm"
           >
             <ChevronLeft className="h-4 w-4" />
-            Anterior
+            <span className="hidden sm:inline">Anterior</span>
           </Button>
           <Button
             variant="outline"
             onClick={onProxima}
             disabled={!temProxima}
-            className="gap-2"
+            className="gap-1 sm:gap-2 h-9 px-2 sm:px-4 text-sm"
           >
-            Próxima
+            <span className="hidden sm:inline">Próxima</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

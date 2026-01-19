@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,8 +75,14 @@ export function LacunaDisplay({
     setShowHints((prev) => ({ ...prev, [lacunaId]: !prev[lacunaId] }));
   };
 
-  // Renderizar texto com inputs
-  const renderTextoComInputs = () => {
+  // Embaralhar opções do dropdown (apenas uma vez)
+  const shuffledOpcoes = useMemo(() => {
+    if (!config.opcoes || config.opcoes.length === 0) return [];
+    return [...config.opcoes].sort(() => Math.random() - 0.5);
+  }, [config.opcoes]);
+
+  // Renderizar texto com selects
+  const renderTextoComSelects = () => {
     let textoProcessado = config.texto;
     const elementos: React.ReactNode[] = [];
     let lastIndex = 0;
@@ -90,21 +102,34 @@ export function LacunaDisplay({
           );
         }
 
-        // Adicionar input da lacuna
+        // Adicionar select da lacuna
         const isCorrect = showResult ? isRespostaCorreta(lacuna.id) : undefined;
+        const respostaAtual = respostas[lacuna.id] || "";
+
         elementos.push(
-          <span key={`lacuna-${lacuna.id}`} className="inline-flex items-center gap-1 mx-1">
-            <Input
-              value={respostas[lacuna.id] || ""}
-              onChange={(e) => updateResposta(lacuna.id, e.target.value)}
+          <span key={`lacuna-${lacuna.id}`} className="inline-flex items-center gap-1 mx-1 align-middle">
+            <Select
+              value={respostaAtual}
+              onValueChange={(value) => updateResposta(lacuna.id, value)}
               disabled={disabled || showResult}
-              className={cn(
-                "w-32 h-8 text-center inline-flex",
-                showResult && isCorrect && "border-green-500 bg-green-500/10",
-                showResult && isCorrect === false && "border-red-500 bg-red-500/10"
-              )}
-              placeholder={`___${index + 1}___`}
-            />
+            >
+              <SelectTrigger
+                className={cn(
+                  "w-[180px] h-8 inline-flex",
+                  showResult && isCorrect && "border-green-500 bg-green-500/10",
+                  showResult && isCorrect === false && "border-red-500 bg-red-500/10"
+                )}
+              >
+                <SelectValue placeholder={`Selecione...`} />
+              </SelectTrigger>
+              <SelectContent>
+                {shuffledOpcoes.map((opcao) => (
+                  <SelectItem key={opcao} value={opcao}>
+                    {opcao}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {showResult && isCorrect !== undefined && (
               isCorrect ? (
                 <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
@@ -144,8 +169,8 @@ export function LacunaDisplay({
   return (
     <div className="space-y-4">
       {/* Texto com lacunas */}
-      <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
-        {renderTextoComInputs()}
+      <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed text-base">
+        {renderTextoComSelects()}
       </div>
 
       {/* Dicas visíveis */}
@@ -176,6 +201,12 @@ export function LacunaDisplay({
           <h4 className="font-medium text-sm">Respostas Corretas:</h4>
           <div className="space-y-2">
             {config.lacunas.map((lacuna, index) => {
+              // Verificar se esta lacuna existe no texto
+              const placeholder = `[LACUNA_${index + 1}]`;
+              if (!config.texto.includes(placeholder)) {
+                return null; // Não mostrar lacunas que não estão no texto
+              }
+
               const isCorrect = isRespostaCorreta(lacuna.id);
               const respostaAluno = respostas[lacuna.id] || "(não respondida)";
 
@@ -210,7 +241,7 @@ export function LacunaDisplay({
                     </p>
                     {!isCorrect && (
                       <p>
-                        <span className="text-muted-foreground">Aceitas:</span>{" "}
+                        <span className="text-muted-foreground">Resposta correta:</span>{" "}
                         <span className="text-green-600">
                           {lacuna.respostasAceitas.join(", ")}
                         </span>
@@ -227,8 +258,7 @@ export function LacunaDisplay({
       {/* Instruções */}
       {!disabled && !showResult && (
         <p className="text-xs text-muted-foreground text-center">
-          Preencha as lacunas com as respostas corretas
-          {!config.caseSensitive && " (não diferencia maiúsculas de minúsculas)"}
+          Selecione a opção correta para cada lacuna no dropdown
         </p>
       )}
     </div>

@@ -112,10 +112,11 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
   });
 
   const tentativasRealizadas = tentativas.length;
-  const tentativasRestantes = Math.max(
-    0,
-    prova.tentativasMax - tentativasRealizadas
-  );
+  // null = tentativas ilimitadas
+  const tentativasIlimitadas = prova.tentativasMax === null;
+  const tentativasRestantes = tentativasIlimitadas
+    ? Infinity
+    : Math.max(0, prova.tentativasMax - tentativasRealizadas);
 
   // Verificar se existe tentativa em andamento
   const tentativaEmAndamento = tentativas.find(
@@ -126,7 +127,7 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
   let proximaTentativaDisponivel: Date | null = null;
   const ultimaTentativa = tentativas.find((t) => t.dataFim !== null);
 
-  if (ultimaTentativa?.dataFim && tentativasRestantes > 0) {
+  if (ultimaTentativa?.dataFim && (tentativasIlimitadas || tentativasRestantes > 0)) {
     const intervaloMs = prova.intervaloTentativas * 60 * 60 * 1000; // horas para ms
     const proximaDisponivel = new Date(
       ultimaTentativa.dataFim.getTime() + intervaloMs
@@ -209,7 +210,9 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
                   <div>
                     <p className="text-sm text-muted-foreground">Tentativas</p>
                     <p className="font-semibold">
-                      {tentativasRealizadas}/{prova.tentativasMax}
+                      {tentativasIlimitadas
+                        ? `${tentativasRealizadas} (Ilimitadas)`
+                        : `${tentativasRealizadas}/${prova.tentativasMax}`}
                     </p>
                   </div>
                 </div>
@@ -359,7 +362,7 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
                     label="Continuar Prova"
                   />
                 </div>
-              ) : tentativasRestantes === 0 ? (
+              ) : !tentativasIlimitadas && tentativasRestantes === 0 ? (
                 <div className="text-center">
                   <XCircle className="mx-auto h-12 w-12 text-red-500 mb-3" />
                   <h3 className="font-semibold mb-1">Sem Tentativas</h3>
@@ -395,9 +398,9 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
                       : "Pronta para Começar"}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    {tentativasRestantes} tentativa
-                    {tentativasRestantes > 1 ? "s" : ""} restante
-                    {tentativasRestantes > 1 ? "s" : ""}
+                    {tentativasIlimitadas
+                      ? "Tentativas ilimitadas"
+                      : `${tentativasRestantes} tentativa${tentativasRestantes > 1 ? "s" : ""} restante${tentativasRestantes > 1 ? "s" : ""}`}
                   </p>
                   <IniciarProvaButton
                     provaId={prova.id}
@@ -449,7 +452,9 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tentativas</span>
                     <span className="font-medium">
-                      {tentativasRealizadas}/{prova.tentativasMax}
+                      {tentativasIlimitadas
+                        ? `${tentativasRealizadas} (Ilimitadas)`
+                        : `${tentativasRealizadas}/${prova.tentativasMax}`}
                     </span>
                   </div>
                 </div>

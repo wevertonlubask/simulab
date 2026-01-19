@@ -30,8 +30,8 @@ export const provaConfigSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório").max(200),
   descricao: z.string().max(1000).optional().nullable(),
   tempoLimite: z.number().int().min(1).max(480).optional().nullable(),
-  tentativasMax: z.number().int().min(1).max(10).default(3),
-  intervaloTentativas: z.number().int().min(0).max(168).default(24),
+  tentativasMax: z.number().int().min(1).max(100).optional().nullable(), // null = ilimitado
+  intervaloTentativas: z.number().int().min(0).max(168).default(0),
   notaMinima: z.number().min(0).max(100).default(70),
   notaConsiderada: z.enum(["MAIOR", "ULTIMA"]).default("MAIOR"),
   mostrarResultado: z.enum(["IMEDIATO", "DATA", "NUNCA"]).default("IMEDIATO"),

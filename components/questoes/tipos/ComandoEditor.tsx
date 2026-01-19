@@ -170,7 +170,13 @@ export function ComandoEditor({
                       addResposta();
                     }
                   }}
-                  placeholder="Digite o comando e pressione Enter"
+                  onBlur={() => {
+                    // Adicionar automaticamente ao perder o foco se tiver texto
+                    if (novaResposta.trim()) {
+                      addResposta();
+                    }
+                  }}
+                  placeholder="Digite o comando e pressione Enter ou Tab"
                   disabled={disabled}
                   className="flex-1 font-mono"
                 />

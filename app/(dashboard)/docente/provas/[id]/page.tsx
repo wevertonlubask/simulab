@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { StatusProvaBadge } from "@/components/provas/StatusProvaBadge";
+import { ProvaConfigForm } from "@/components/provas/ProvaConfigForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, BookOpen, Users, Calendar, Settings, FileText } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChevronLeft, BookOpen, Users, Calendar, Settings, FileText, Info } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -157,25 +159,25 @@ export default async function ProvaDetalhesPage({ params }: PageProps) {
       </div>
 
       {prova.status === "RASCUNHO" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Prova em rascunho</CardTitle>
+        <Card className="border-blue-500/30 bg-blue-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-blue-600">
+              <Info className="h-5 w-5" />
+              Prova em rascunho
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Esta prova ainda não foi publicada. Os alunos não poderão acessá-la até que seja publicada.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Revise as questões e publique quando estiver pronta.
+            <p className="text-muted-foreground">
+              Esta prova ainda não foi publicada. Configure as opções abaixo e publique quando estiver pronta.
             </p>
           </CardContent>
         </Card>
       )}
 
       {prova.status === "ENCERRADA" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Prova encerrada</CardTitle>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg text-destructive">Prova encerrada</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
@@ -189,6 +191,88 @@ export default async function ProvaDetalhesPage({ params }: PageProps) {
           </CardContent>
         </Card>
       )}
+
+      <Tabs defaultValue="config" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="config" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </TabsTrigger>
+          <TabsTrigger value="info" className="gap-2">
+            <Info className="h-4 w-4" />
+            Informações
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config">
+          <ProvaConfigForm
+            prova={{
+              id: prova.id,
+              nome: prova.nome,
+              descricao: prova.descricao,
+              tempoLimite: prova.tempoLimite,
+              tentativasMax: prova.tentativasMax,
+              intervaloTentativas: prova.intervaloTentativas,
+              notaMinima: prova.notaMinima,
+              notaConsiderada: prova.notaConsiderada,
+              mostrarResultado: prova.mostrarResultado,
+              dataResultado: prova.dataResultado,
+              embaralharQuestoes: prova.embaralharQuestoes,
+              embaralharAlternativas: prova.embaralharAlternativas,
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="info">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resumo da Prova</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm text-muted-foreground">Código</dt>
+                  <dd className="font-mono font-medium">{prova.codigo}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Status</dt>
+                  <dd><StatusProvaBadge status={prova.status} /></dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Tempo Limite</dt>
+                  <dd>{prova.tempoLimite ? `${prova.tempoLimite} minutos` : "Sem limite"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Tentativas</dt>
+                  <dd>{prova.tentativasMax ? `${prova.tentativasMax} tentativa(s)` : "Ilimitadas"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Intervalo entre Tentativas</dt>
+                  <dd>{prova.intervaloTentativas > 0 ? `${prova.intervaloTentativas} hora(s)` : "Sem intervalo"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Nota Mínima</dt>
+                  <dd>{prova.notaMinima}%</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Nota Considerada</dt>
+                  <dd>{prova.notaConsiderada === "MAIOR" ? "Maior nota" : "Última tentativa"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Resultado</dt>
+                  <dd>
+                    {prova.mostrarResultado === "IMEDIATO"
+                      ? "Imediato"
+                      : prova.mostrarResultado === "NUNCA"
+                      ? "Nunca"
+                      : `Em ${prova.dataResultado ? new Date(prova.dataResultado).toLocaleDateString("pt-BR") : "data não definida"}`}
+                  </dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

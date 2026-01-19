@@ -4,8 +4,8 @@ export const alternativaSchema = z.object({
   id: z.string().optional(),
   texto: z
     .string()
-    .min(1, "Texto da alternativa é obrigatório")
-    .max(500, "Texto deve ter no máximo 500 caracteres"),
+    .max(500, "Texto deve ter no máximo 500 caracteres")
+    .default(""),
   imagemUrl: z
     .string()
     .optional()
@@ -82,6 +82,7 @@ export const lacunaItemSchema = z.object({
 export const lacunaConfigSchema = z.object({
   texto: z.string().min(10, "Texto com lacunas é obrigatório"),
   lacunas: z.array(lacunaItemSchema).min(1, "Pelo menos 1 lacuna"),
+  opcoes: z.array(z.string()).default([]),
   caseSensitive: z.boolean().default(false),
   pontuacaoParcial: z.boolean().default(true),
 });
@@ -124,7 +125,8 @@ export const questaoConfigSchema = z.union([
   comandoConfigSchema,
 ]).nullable().optional();
 
-export const questaoSchema = z.object({
+// Schema base para questões (sem validação condicional de alternativas)
+const questaoBaseSchema = z.object({
   tipo: z.enum([
     "MULTIPLA_ESCOLHA_UNICA",
     "MULTIPLA_ESCOLHA_MULTIPLA",
@@ -161,14 +163,42 @@ export const questaoSchema = z.object({
     .default([]),
   alternativas: z
     .array(alternativaSchema)
-    .min(2, "Mínimo 2 alternativas")
     .max(6, "Máximo 6 alternativas")
     .optional()
     .default([]),
   configuracao: questaoConfigSchema,
 });
 
-export const questaoUpdateSchema = questaoSchema.partial();
+// Schema com validação condicional: alternativas obrigatórias apenas para múltipla escolha
+export const questaoSchema = questaoBaseSchema.superRefine((data, ctx) => {
+  const tiposMultiplaEscolha = ["MULTIPLA_ESCOLHA_UNICA", "MULTIPLA_ESCOLHA_MULTIPLA"];
+
+  if (tiposMultiplaEscolha.includes(data.tipo)) {
+    // Para múltipla escolha, exigir alternativas válidas
+    if (!data.alternativas || data.alternativas.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Mínimo 2 alternativas para questão de múltipla escolha",
+        path: ["alternativas"],
+      });
+      return;
+    }
+
+    // Verificar se todas as alternativas têm texto
+    for (let i = 0; i < data.alternativas.length; i++) {
+      if (!data.alternativas[i].texto || data.alternativas[i].texto.trim() === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Texto da alternativa ${i + 1} é obrigatório`,
+          path: ["alternativas", i, "texto"],
+        });
+      }
+    }
+  }
+  // Para outros tipos, alternativas não são necessárias (validação ignorada)
+});
+
+export const questaoUpdateSchema = questaoBaseSchema.partial();
 
 export const reordenarSchema = z.object({
   ordem: z.number().int().min(0),

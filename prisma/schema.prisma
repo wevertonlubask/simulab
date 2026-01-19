@@ -171,8 +171,8 @@ model Prova {
   nome                   String
   descricao              String?
   tempoLimite            Int?
-  tentativasMax          Int              @default(3)
-  intervaloTentativas    Int              @default(24)
+  tentativasMax          Int?             // null = ilimitado
+  intervaloTentativas    Int              @default(0)
   notaMinima             Float            @default(70)
   notaConsiderada        NotaConsiderada  @default(MAIOR)
   mostrarResultado       MostrarResultado @default(IMEDIATO)

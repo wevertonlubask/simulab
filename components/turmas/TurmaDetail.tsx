@@ -78,7 +78,7 @@ interface Prova {
   nome: string;
   status: string;
   tempoLimite: number | null;
-  tentativasMax: number;
+  tentativasMax: number | null;
   simulado: {
     nome: string;
     categoria: string;

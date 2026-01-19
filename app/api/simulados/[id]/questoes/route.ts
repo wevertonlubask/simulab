@@ -166,6 +166,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         peso: validatedData.peso,
         tags: validatedData.tags,
         ordem: (maxOrdem._max.ordem || 0) + 1,
+        configuracao: body.configuracao || null,
         alternativas: {
           create: validatedData.alternativas.map((alt, index) => ({
             texto: alt.texto,

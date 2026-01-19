@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -16,7 +16,7 @@ import {
   useDroppable,
   useDraggable,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { DragDropConfig } from "@/lib/validations/questao";
@@ -34,30 +34,41 @@ export interface DragDropResposta {
   posicoes: Record<string, string[]>;
 }
 
-// Item arrastável
+// Item arrastável com suporte a tap-to-select
 function DraggableItem({
   id,
   texto,
   isDragging,
   isInZone,
   disabled,
+  isSelected,
+  onTap,
 }: {
   id: string;
   texto: string;
   isDragging?: boolean;
   isInZone?: boolean;
   disabled?: boolean;
+  isSelected?: boolean;
+  onTap?: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging: isCurrentlyDragging } = useDraggable({
     id,
     disabled,
   });
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
-    : undefined;
+  const style: React.CSSProperties = {
+    opacity: isCurrentlyDragging ? 0 : 1,
+    cursor: disabled ? 'not-allowed' : 'grab',
+  };
+
+  const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+    // Previne que o click dispare o drag
+    if (onTap && !disabled) {
+      e.stopPropagation();
+      onTap();
+    }
+  };
 
   return (
     <div
@@ -65,14 +76,16 @@ function DraggableItem({
       style={style}
       {...listeners}
       {...attributes}
+      onClick={handleClick}
       className={cn(
         "px-3 py-2 rounded-lg font-medium text-sm transition-all select-none",
-        "border-2 cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-50 ring-2 ring-primary",
+        "border-2 active:cursor-grabbing",
+        isDragging && "ring-2 ring-primary",
+        isSelected && "ring-2 ring-primary bg-primary/20 border-primary scale-105",
         isInZone
           ? "bg-primary/10 text-primary border-primary/30"
           : "bg-background border-border hover:border-primary/50",
-        disabled && "cursor-not-allowed opacity-60"
+        disabled && "opacity-60"
       )}
     >
       {texto}
@@ -80,7 +93,7 @@ function DraggableItem({
   );
 }
 
-// Zona de destino
+// Zona de destino com suporte a tap-to-place
 function DroppableZone({
   id,
   label,
@@ -92,6 +105,8 @@ function DroppableZone({
   showResult,
   itensCorretos,
   onRemoveItem,
+  isTargetable,
+  onTap,
 }: {
   id: string;
   label: string;
@@ -103,6 +118,8 @@ function DroppableZone({
   showResult?: boolean;
   itensCorretos?: string[];
   onRemoveItem: (itemId: string) => void;
+  isTargetable?: boolean;
+  onTap?: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
 
@@ -112,29 +129,45 @@ function DroppableZone({
       itensCorretos.every((i) => itens.includes(i))
     : undefined;
 
+  const handleZoneClick = (e: React.MouseEvent) => {
+    if (onTap && isTargetable && !disabled) {
+      e.stopPropagation();
+      onTap();
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
+      onClick={handleZoneClick}
       className={cn(
         "p-4 rounded-lg border-2 border-dashed min-h-[100px] transition-all",
         isOver && !disabled && "border-primary bg-primary/5",
-        !isOver && "border-muted-foreground/30 bg-muted/30",
+        isTargetable && !disabled && "border-primary bg-primary/10 cursor-pointer animate-pulse",
+        !isOver && !isTargetable && "border-muted-foreground/30 bg-muted/30",
         showResult && isCorreto === true && "border-green-500 bg-green-500/10",
         showResult && isCorreto === false && "border-red-500 bg-red-500/10"
       )}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="font-medium text-sm">{label}</span>
-        {aceitaMultiplos && (
-          <Badge variant="outline" className="text-xs">
-            Múltiplos
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {isTargetable && (
+            <Badge variant="default" className="text-xs animate-bounce">
+              Toque aqui
+            </Badge>
+          )}
+          {aceitaMultiplos && (
+            <Badge variant="outline" className="text-xs">
+              Múltiplos
+            </Badge>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2 min-h-[40px]">
         {itens.length === 0 ? (
           <span className="text-xs text-muted-foreground">
-            Arraste itens aqui
+            {isTargetable ? "Toque para colocar o item aqui" : "Arraste itens aqui"}
           </span>
         ) : (
           itens.map((itemId) => {
@@ -155,7 +188,10 @@ function DroppableZone({
                   showResult && itemCorreto === true && "bg-green-500",
                   showResult && itemCorreto === false && "bg-red-500"
                 )}
-                onClick={() => !disabled && onRemoveItem(itemId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!disabled) onRemoveItem(itemId);
+                }}
               >
                 {item.texto}
                 {!disabled && !showResult && (
@@ -170,30 +206,51 @@ function DroppableZone({
   );
 }
 
-// Container de itens disponíveis
+// Container de itens disponíveis com suporte a tap-to-select
 function ItemsContainer({
   itens,
   usedItemIds,
   disabled,
+  selectedItemId,
+  onItemSelect,
+  onReturnItem,
 }: {
   itens: DragDropConfig["itens"];
   usedItemIds: string[];
   disabled?: boolean;
+  selectedItemId: string | null;
+  onItemSelect: (itemId: string) => void;
+  onReturnItem?: () => void;
 }) {
   const availableItens = itens.filter((item) => !usedItemIds.includes(item.id));
   const { setNodeRef, isOver } = useDroppable({ id: "origem" });
 
+  const handleContainerClick = () => {
+    if (onReturnItem && selectedItemId) {
+      onReturnItem();
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
+      onClick={handleContainerClick}
       className={cn(
         "p-4 rounded-lg border-2 min-h-[80px] transition-all",
-        isOver && !disabled ? "border-primary bg-primary/5" : "border-border bg-muted/50"
+        isOver && !disabled ? "border-primary bg-primary/5" : "border-border bg-muted/50",
+        selectedItemId && "border-primary/50"
       )}
     >
-      <span className="text-sm font-medium text-muted-foreground block mb-3">
-        Itens disponíveis ({availableItens.length})
-      </span>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-muted-foreground">
+          Itens disponíveis ({availableItens.length})
+        </span>
+        {selectedItemId && (
+          <Badge variant="secondary" className="text-xs">
+            Item selecionado - toque na zona de destino
+          </Badge>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         {availableItens.length === 0 ? (
           <span className="text-xs text-muted-foreground">
@@ -206,6 +263,8 @@ function ItemsContainer({
               id={item.id}
               texto={item.texto}
               disabled={disabled}
+              isSelected={selectedItemId === item.id}
+              onTap={() => onItemSelect(item.id)}
             />
           ))
         )}
@@ -224,6 +283,8 @@ export function DragDropDisplay({
 }: DragDropDisplayProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  // Estado para o modo tap-to-select (mobile)
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   // Sensores para desktop e mobile
   const sensors = useSensors(
@@ -234,7 +295,7 @@ export function DragDropDisplay({
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 250,
+        delay: 300,
         tolerance: 5,
       },
     }),
@@ -257,24 +318,8 @@ export function DragDropDisplay({
     .filter(([key]) => key !== "naoUsados")
     .flatMap(([, ids]) => ids);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    setOverId(event.over?.id as string | null);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-    setOverId(null);
-
-    if (!over) return;
-
-    const itemId = active.id as string;
-    const destino = over.id as string;
-
+  // Função para mover item para zona (usado tanto por drag&drop quanto por tap)
+  const moveItemToZone = (itemId: string, destinoId: string) => {
     // Encontrar onde o item está atualmente
     let origemZona: string | null = null;
     for (const [zonaId, items] of Object.entries(value.posicoes || {})) {
@@ -285,7 +330,7 @@ export function DragDropDisplay({
     }
 
     // Se destino é origem, remover da zona atual
-    if (destino === "origem") {
+    if (destinoId === "origem") {
       if (origemZona) {
         const newPosicoes = { ...value.posicoes };
         newPosicoes[origemZona] = newPosicoes[origemZona].filter(
@@ -297,21 +342,21 @@ export function DragDropDisplay({
     }
 
     // Verificar se destino é uma zona válida
-    const zonaDestino = config.zonas.find((z) => z.id === destino);
+    const zonaDestino = config.zonas.find((z) => z.id === destinoId);
     if (!zonaDestino) return;
 
     // Verificar se a zona aceita mais itens
-    const itensNaZona = value.posicoes?.[destino] || [];
+    const itensNaZona = value.posicoes?.[destinoId] || [];
     if (!zonaDestino.aceitaMultiplos && itensNaZona.length > 0) {
       // Trocar item se zona não aceita múltiplos
       const itemAntigo = itensNaZona[0];
       const newPosicoes = { ...value.posicoes };
 
       // Remover item antigo da zona destino
-      newPosicoes[destino] = [itemId];
+      newPosicoes[destinoId] = [itemId];
 
       // Se o item veio de outra zona, colocar o item antigo lá
-      if (origemZona && origemZona !== destino) {
+      if (origemZona && origemZona !== destinoId) {
         newPosicoes[origemZona] = newPosicoes[origemZona]
           .filter((id) => id !== itemId)
           .concat([itemAntigo]);
@@ -332,9 +377,57 @@ export function DragDropDisplay({
     }
 
     // Adicionar ao destino
-    newPosicoes[destino] = [...(newPosicoes[destino] || []), itemId];
+    newPosicoes[destinoId] = [...(newPosicoes[destinoId] || []), itemId];
 
     onChange({ posicoes: newPosicoes });
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+    // Limpar seleção tap quando começa a arrastar
+    setSelectedItemId(null);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverId(event.over?.id as string | null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setOverId(null);
+
+    if (!over) return;
+
+    const itemId = active.id as string;
+    const destino = over.id as string;
+
+    moveItemToZone(itemId, destino);
+  };
+
+  // Handlers para o modo tap-to-select
+  const handleItemSelect = (itemId: string) => {
+    if (disabled) return;
+
+    if (selectedItemId === itemId) {
+      // Desselecionar se clicar no mesmo item
+      setSelectedItemId(null);
+    } else {
+      setSelectedItemId(itemId);
+    }
+  };
+
+  const handleZoneTap = (zonaId: string) => {
+    if (disabled || !selectedItemId) return;
+
+    moveItemToZone(selectedItemId, zonaId);
+    setSelectedItemId(null);
+  };
+
+  const handleReturnSelectedItem = () => {
+    // Quando um item está selecionado e o usuário toca na área de origem,
+    // apenas desseleciona
+    setSelectedItemId(null);
   };
 
   const handleRemoveItem = (zonaId: string, itemId: string) => {
@@ -348,64 +441,100 @@ export function DragDropDisplay({
     ? config.itens.find((item) => item.id === activeId)
     : null;
 
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="space-y-4">
-        {/* Container de itens */}
-        <ItemsContainer
-          itens={config.itens}
-          usedItemIds={usedItemIds}
-          disabled={disabled}
-        />
+  // Ref para o container
+  const containerRef = useRef<HTMLDivElement>(null);
 
-        {/* Zonas de destino */}
-        <div
-          className={cn(
-            "grid gap-4",
-            config.layoutZonas === "horizontal" && "grid-cols-1 md:grid-cols-3",
-            config.layoutZonas === "vertical" && "grid-cols-1",
-            config.layoutZonas === "grid" && "grid-cols-1 md:grid-cols-2"
+  // Limpar seleção quando clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setSelectedItemId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        modifiers={[restrictToWindowEdges]}
+      >
+        <div className="space-y-4">
+          {/* Container de itens */}
+          <ItemsContainer
+            itens={config.itens}
+            usedItemIds={usedItemIds}
+            disabled={disabled}
+            selectedItemId={selectedItemId}
+            onItemSelect={handleItemSelect}
+            onReturnItem={handleReturnSelectedItem}
+          />
+
+          {/* Zonas de destino */}
+          <div
+            className={cn(
+              "grid gap-4",
+              config.layoutZonas === "horizontal" && "grid-cols-1 md:grid-cols-3",
+              config.layoutZonas === "vertical" && "grid-cols-1",
+              config.layoutZonas === "grid" && "grid-cols-1 md:grid-cols-2"
+            )}
+          >
+            {config.zonas.map((zona) => (
+              <DroppableZone
+                key={zona.id}
+                id={zona.id}
+                label={zona.label}
+                itens={value.posicoes?.[zona.id] || []}
+                allItens={config.itens}
+                aceitaMultiplos={zona.aceitaMultiplos}
+                isOver={overId === zona.id}
+                disabled={disabled}
+                showResult={showResult}
+                itensCorretos={zona.itensCorretos}
+                onRemoveItem={(itemId) => handleRemoveItem(zona.id, itemId)}
+                isTargetable={!!selectedItemId}
+                onTap={() => handleZoneTap(zona.id)}
+              />
+            ))}
+          </div>
+
+          {/* Instruções */}
+          {!disabled && !showResult && (
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              <p>
+                <strong>Desktop:</strong> Arraste os itens para as zonas corretas.
+              </p>
+              <p>
+                <strong>Mobile:</strong> Toque em um item para selecioná-lo, depois toque na zona de destino.
+              </p>
+              <p>
+                Clique em um item na zona para removê-lo.
+              </p>
+            </div>
           )}
-        >
-          {config.zonas.map((zona) => (
-            <DroppableZone
-              key={zona.id}
-              id={zona.id}
-              label={zona.label}
-              itens={value.posicoes?.[zona.id] || []}
-              allItens={config.itens}
-              aceitaMultiplos={zona.aceitaMultiplos}
-              isOver={overId === zona.id}
-              disabled={disabled}
-              showResult={showResult}
-              itensCorretos={zona.itensCorretos}
-              onRemoveItem={(itemId) => handleRemoveItem(zona.id, itemId)}
-            />
-          ))}
         </div>
 
-        {/* Instruções */}
-        {!disabled && !showResult && (
-          <p className="text-xs text-muted-foreground text-center">
-            Arraste os itens para as zonas corretas. Clique em um item na zona para removê-lo.
-          </p>
-        )}
-      </div>
-
-      {/* Overlay durante arraste */}
-      <DragOverlay>
-        {activeItem ? (
-          <div className="px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm shadow-lg">
-            {activeItem.texto}
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        {/* Overlay durante arraste */}
+        <DragOverlay
+          dropAnimation={{
+            duration: 200,
+            easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
+          }}
+        >
+          {activeItem ? (
+            <div className="px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm shadow-lg">
+              {activeItem.texto}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
   );
 }

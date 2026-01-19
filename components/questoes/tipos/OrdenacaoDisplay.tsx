@@ -138,15 +138,77 @@ export function OrdenacaoDisplay({
     })
   );
 
+  // Função para embaralhar maximizando a distância da ordem correta
+  const shuffleMaxDistance = (correctOrder: string[]): string[] => {
+    const n = correctOrder.length;
+
+    if (n <= 1) return [...correctOrder];
+
+    // Para arrays pequenos (2-3 itens), simplesmente inverter
+    if (n <= 3) {
+      return [...correctOrder].reverse();
+    }
+
+    // Estratégia: colocar cada item o mais longe possível da posição correta
+    // Intercalar itens do final com itens do início
+    const result: string[] = new Array(n);
+    const mid = Math.floor(n / 2);
+
+    // Colocar a segunda metade no início e a primeira metade no final
+    for (let i = 0; i < n; i++) {
+      if (i < mid) {
+        // Primeira metade vai para o final
+        result[n - 1 - i] = correctOrder[i];
+      } else {
+        // Segunda metade vai para o início
+        result[i - mid] = correctOrder[i];
+      }
+    }
+
+    // Verificar se algum item ficou na posição correta e trocar
+    for (let i = 0; i < n; i++) {
+      if (result[i] === correctOrder[i]) {
+        // Encontrar outra posição para trocar
+        for (let j = 0; j < n; j++) {
+          if (i !== j && result[j] !== correctOrder[j] && result[i] !== correctOrder[j] && result[j] !== correctOrder[i]) {
+            // Trocar
+            [result[i], result[j]] = [result[j], result[i]];
+            break;
+          }
+        }
+      }
+    }
+
+    // Embaralhar um pouco mais para não ficar previsível (mas mantendo distância)
+    // Fazer algumas trocas aleatórias que não coloquem itens na posição correta
+    for (let attempt = 0; attempt < n; attempt++) {
+      const i = Math.floor(Math.random() * n);
+      const j = Math.floor(Math.random() * n);
+      if (i !== j) {
+        // Verificar se a troca não coloca nenhum item na posição correta
+        const newPosI = result[j] !== correctOrder[i];
+        const newPosJ = result[i] !== correctOrder[j];
+        if (newPosI && newPosJ) {
+          [result[i], result[j]] = [result[j], result[i]];
+        }
+      }
+    }
+
+    return result;
+  };
+
   // Inicializar com ordem embaralhada ou ordem existente
   useEffect(() => {
     if (value?.ordem && value.ordem.length > 0) {
       setItems(value.ordem);
     } else {
-      // Embaralhar itens
-      const shuffled = [...config.itens]
-        .map((item) => item.id)
-        .sort(() => Math.random() - 0.5);
+      // Obter ordem correta
+      const correctOrder = [...config.itens]
+        .sort((a, b) => a.ordemCorreta - b.ordemCorreta)
+        .map((item) => item.id);
+
+      // Embaralhar maximizando distância da ordem correta
+      const shuffled = shuffleMaxDistance(correctOrder);
       setItems(shuffled);
       onChange({ ordem: shuffled });
     }

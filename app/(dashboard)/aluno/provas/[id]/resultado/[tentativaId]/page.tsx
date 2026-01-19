@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import type { TipoQuestao } from "@prisma/client";
 import { CertificadoDownloadCard } from "@/components/certificado/CertificadoDownloadCard";
 
@@ -136,7 +137,7 @@ export default async function ResultadoProvaPage({
   const renderRespostaAluno = (
     questao: (typeof tentativa.prova.questoes)[0]["questao"],
     resposta: (typeof tentativa.respostas)[0] | undefined
-  ) => {
+  ): React.ReactNode => {
     if (!resposta || !resposta.resposta) {
       return (
         <span className="text-muted-foreground italic">Não respondida</span>
@@ -164,20 +165,52 @@ export default async function ResultadoProvaPage({
       case "ORDENACAO": {
         const ordem = respostaData.ordem as string[];
         if (!ordem || ordem.length === 0) return "Não ordenado";
-        return ordem
-          .map((id, i) => {
-            const alt = questao.alternativas.find((a) => a.id === id);
-            return `${i + 1}. ${alt?.texto || "?"}`;
-          })
-          .join(" → ");
+        const config = questao.configuracao as {
+          itens?: { id: string; texto: string; ordemCorreta: number }[];
+        } | null;
+        if (!config?.itens) return "Configuração não encontrada";
+        return (
+          <div className="space-y-1">
+            {ordem.map((id, i) => {
+              const item = config.itens?.find((it) => it.id === id);
+              return (
+                <div key={id}>
+                  {i + 1}. {item?.texto || "?"}
+                </div>
+              );
+            })}
+          </div>
+        );
       }
 
       case "LACUNA": {
-        const lacunas = respostaData.lacunas as Record<string, string>;
-        if (!lacunas) return "Não preenchida";
-        return Object.entries(lacunas)
-          .map(([key, value]) => `[${key}]: ${value}`)
-          .join(", ");
+        // Suportar ambos formatos: { respostas: {...} } ou { lacunas: {...} }
+        const lacunas = (respostaData.respostas || respostaData.lacunas) as Record<string, string>;
+        if (!lacunas || Object.keys(lacunas).length === 0) return "Não preenchida";
+        const config = questao.configuracao as {
+          lacunas?: { id: string; respostasAceitas: string[] }[];
+        } | null;
+        // Mapear IDs para índices
+        const idToIndex = new Map<string, number>();
+        config?.lacunas?.forEach((l, i) => idToIndex.set(l.id, i));
+
+        const entries = Object.entries(lacunas).sort(([a], [b]) => {
+          const indexA = idToIndex.get(a) ?? parseInt(a);
+          const indexB = idToIndex.get(b) ?? parseInt(b);
+          return indexA - indexB;
+        });
+        return (
+          <div className="space-y-1">
+            {entries.map(([key, value], idx) => {
+              const lacunaIndex = idToIndex.get(key) ?? parseInt(key);
+              return (
+                <div key={key}>
+                  Lacuna {lacunaIndex + 1}: {value || "(vazio)"}
+                </div>
+              );
+            })}
+          </div>
+        );
       }
 
       case "COMANDO": {
@@ -194,47 +227,101 @@ export default async function ResultadoProvaPage({
             colunaB?: { id: string; texto: string }[];
           } | null;
           if (!config) {
-            return conexoes.map((c) => `${c.de} → ${c.para}`).join(", ");
+            return (
+              <div className="space-y-1">
+                {conexoes.map((c, i) => (
+                  <div key={i}>{c.de} → {c.para}</div>
+                ))}
+              </div>
+            );
           }
-          return conexoes
-            .map((c) => {
-              const itemA = config.colunaA?.find((i) => i.id === c.de);
-              const itemB = config.colunaB?.find((i) => i.id === c.para);
-              const indexA = config.colunaA?.findIndex((i) => i.id === c.de) ?? -1;
-              const indexB = config.colunaB?.findIndex((i) => i.id === c.para) ?? -1;
-              return `${indexA + 1}. ${itemA?.texto || c.de} → ${String.fromCharCode(65 + indexB)}. ${itemB?.texto || c.para}`;
-            })
-            .join(" | ");
+          return (
+            <div className="space-y-1">
+              {conexoes.map((c, i) => {
+                const itemA = config.colunaA?.find((item) => item.id === c.de);
+                const itemB = config.colunaB?.find((item) => item.id === c.para);
+                const indexA = config.colunaA?.findIndex((item) => item.id === c.de) ?? -1;
+                const indexB = config.colunaB?.findIndex((item) => item.id === c.para) ?? -1;
+                return (
+                  <div key={i}>
+                    {indexA + 1}. {itemA?.texto || c.de} → {String.fromCharCode(65 + indexB)}. {itemB?.texto || c.para}
+                  </div>
+                );
+              })}
+            </div>
+          );
         }
 
         // Formato legado (associacoes)
         const associacoes = respostaData.associacoes as Record<string, string>;
         if (!associacoes) return "Não associado";
-        return Object.entries(associacoes)
-          .map(([esq, dir]) => `${esq} → ${dir}`)
-          .join(", ");
+        return (
+          <div className="space-y-1">
+            {Object.entries(associacoes).map(([esq, dir], i) => (
+              <div key={i}>{esq} → {dir}</div>
+            ))}
+          </div>
+        );
       }
 
       case "DRAG_DROP": {
         const posicoes = respostaData.posicoes as Record<string, string[]>;
-        if (!posicoes) return "Não posicionado";
+        if (!posicoes || Object.keys(posicoes).length === 0) return "Não posicionado";
         const config = questao.configuracao as {
           itens?: { id: string; texto: string }[];
           zonas?: { id: string; label: string }[];
         } | null;
         if (!config) return "Configuração não encontrada";
 
-        return Object.entries(posicoes)
-          .filter(([zonaId, itens]) => itens.length > 0)
-          .map(([zonaId, itensIds]) => {
-            const zona = config.zonas?.find((z) => z.id === zonaId);
-            const itensTexto = itensIds
-              .map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
-              .filter(Boolean)
-              .join(", ");
-            return `${zona?.label || zonaId}: ${itensTexto}`;
+        const zonasComItens = Object.entries(posicoes)
+          .filter(([_, itens]) => itens.length > 0);
+
+        if (zonasComItens.length === 0) return "Não posicionado";
+
+        return (
+          <div className="space-y-1">
+            {zonasComItens.map(([zonaId, itensIds]) => {
+              const zona = config.zonas?.find((z) => z.id === zonaId);
+              const itensTexto = itensIds
+                .map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
+                .filter(Boolean)
+                .join(", ");
+              return (
+                <div key={zonaId}>
+                  {zona?.label || zonaId}: {itensTexto}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      case "HOTSPOT": {
+        const cliques = respostaData.cliques as { x: number; y: number; areaId?: string }[];
+        if (!cliques || cliques.length === 0) return "Não clicado";
+        const config = questao.configuracao as {
+          areas?: { id: string; label?: string; correta: boolean }[];
+        } | null;
+
+        const areasClicadas = cliques
+          .filter((c) => c.areaId)
+          .map((c) => {
+            const area = config?.areas?.find((a) => a.id === c.areaId);
+            return area?.label || c.areaId;
           })
-          .join(" | ");
+          .filter(Boolean);
+
+        if (areasClicadas.length === 0) {
+          return `Clique fora das áreas definidas`;
+        }
+
+        return (
+          <div className="space-y-1">
+            {areasClicadas.map((label, i) => (
+              <div key={i}>Área: {label}</div>
+            ))}
+          </div>
+        );
       }
 
       default:
@@ -245,7 +332,7 @@ export default async function ResultadoProvaPage({
   // Função para renderizar a resposta correta
   const renderRespostaCorreta = (
     questao: (typeof tentativa.prova.questoes)[0]["questao"]
-  ) => {
+  ): React.ReactNode => {
     switch (questao.tipo) {
       case "MULTIPLA_ESCOLHA_UNICA": {
         const correta = questao.alternativas.find((a) => a.correta);
@@ -259,15 +346,64 @@ export default async function ResultadoProvaPage({
       }
 
       case "ORDENACAO": {
-        return questao.alternativas
-          .sort((a, b) => a.ordem - b.ordem)
-          .map((a, i) => `${i + 1}. ${a.texto}`)
-          .join(" → ");
+        const config = questao.configuracao as {
+          itens?: { id: string; texto: string; ordemCorreta: number }[];
+        } | null;
+        if (!config?.itens || config.itens.length === 0) return "Não definida";
+        const itensOrdenados = [...config.itens].sort((a, b) => a.ordemCorreta - b.ordemCorreta);
+        return (
+          <div className="space-y-1">
+            {itensOrdenados.map((item, i) => (
+              <div key={item.id}>
+                {i + 1}. {item.texto}
+              </div>
+            ))}
+          </div>
+        );
       }
 
-      case "LACUNA":
-      case "COMANDO":
-        return "Veja a explicação abaixo";
+      case "LACUNA": {
+        const config = questao.configuracao as {
+          texto?: string;
+          lacunas?: { id: string; respostasAceitas: string[] }[];
+        } | null;
+        if (!config?.lacunas || config.lacunas.length === 0) return "Não definida";
+        // Filtrar apenas lacunas que existem no texto
+        const lacunasNoTexto = config.lacunas.filter((_, i) => {
+          const placeholder = `[LACUNA_${i + 1}]`;
+          return config.texto?.includes(placeholder);
+        });
+        if (lacunasNoTexto.length === 0) return "Não definida";
+        return (
+          <div className="space-y-1">
+            {lacunasNoTexto.map((lacuna, i) => {
+              // Encontrar o índice original da lacuna
+              const originalIndex = config.lacunas!.findIndex((l) => l.id === lacuna.id);
+              return (
+                <div key={lacuna.id}>
+                  Lacuna {originalIndex + 1}: {lacuna.respostasAceitas.join(" / ")}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      case "COMANDO": {
+        const config = questao.configuracao as {
+          respostasAceitas?: string[];
+        } | null;
+        if (!config?.respostasAceitas || config.respostasAceitas.length === 0) return "Não definida";
+        return (
+          <div className="space-y-1">
+            {config.respostasAceitas.map((cmd, i) => (
+              <div key={i} className="font-mono">
+                {cmd}
+              </div>
+            ))}
+          </div>
+        );
+      }
 
       case "ASSOCIACAO": {
         const config = questao.configuracao as {
@@ -280,13 +416,19 @@ export default async function ResultadoProvaPage({
           return "Veja a explicação abaixo";
         }
 
-        return config.conexoesCorretas
-          .map((c) => {
-            const indexA = config.colunaA?.findIndex((i) => i.id === c.de) ?? -1;
-            const indexB = config.colunaB?.findIndex((i) => i.id === c.para) ?? -1;
-            return `${indexA + 1} → ${String.fromCharCode(65 + indexB)}`;
-          })
-          .join(" | ");
+        return (
+          <div className="space-y-1">
+            {config.conexoesCorretas.map((c, i) => {
+              const indexA = config.colunaA?.findIndex((item) => item.id === c.de) ?? -1;
+              const indexB = config.colunaB?.findIndex((item) => item.id === c.para) ?? -1;
+              return (
+                <div key={i}>
+                  {indexA + 1} → {String.fromCharCode(65 + indexB)}
+                </div>
+              );
+            })}
+          </div>
+        );
       }
 
       case "DRAG_DROP": {
@@ -296,21 +438,110 @@ export default async function ResultadoProvaPage({
         } | null;
         if (!config || !config.zonas) return "Configuração não encontrada";
 
-        return config.zonas
-          .filter((zona) => zona.itensCorretos && zona.itensCorretos.length > 0)
-          .map((zona) => {
-            const itensTexto = zona.itensCorretos
-              ?.map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
-              .filter(Boolean)
-              .join(", ");
-            return `${zona.label}: ${itensTexto}`;
-          })
-          .join(" | ");
+        const zonasComItens = config.zonas.filter(
+          (zona) => zona.itensCorretos && zona.itensCorretos.length > 0
+        );
+
+        if (zonasComItens.length === 0) return "Não definida";
+
+        return (
+          <div className="space-y-1">
+            {zonasComItens.map((zona) => {
+              const itensTexto = zona.itensCorretos
+                ?.map((itemId) => config.itens?.find((i) => i.id === itemId)?.texto)
+                .filter(Boolean)
+                .join(", ");
+              return (
+                <div key={zona.id}>
+                  {zona.label}: {itensTexto}
+                </div>
+              );
+            })}
+          </div>
+        );
+      }
+
+      case "HOTSPOT": {
+        const config = questao.configuracao as {
+          areas?: { id: string; label?: string; correta: boolean }[];
+        } | null;
+        if (!config?.areas) return "Configuração não encontrada";
+
+        const areasCorretas = config.areas.filter((a) => a.correta);
+        if (areasCorretas.length === 0) return "Nenhuma área correta definida";
+
+        return (
+          <div className="space-y-1">
+            {areasCorretas.map((area) => (
+              <div key={area.id}>
+                Área: {area.label || area.id}
+              </div>
+            ))}
+          </div>
+        );
       }
 
       default:
         return "Não disponível";
     }
+  };
+
+  // Função para renderizar o texto completo com as respostas corretas destacadas (para LACUNA)
+  const renderTextoComRespostas = (
+    questao: (typeof tentativa.prova.questoes)[0]["questao"]
+  ): React.ReactNode | null => {
+    if (questao.tipo !== "LACUNA") return null;
+
+    const config = questao.configuracao as {
+      texto?: string;
+      lacunas?: { id: string; respostasAceitas: string[] }[];
+    } | null;
+
+    if (!config?.texto || !config?.lacunas) return null;
+
+    let textoProcessado = config.texto;
+    const elementos: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    config.lacunas.forEach((lacuna, index) => {
+      const placeholder = `[LACUNA_${index + 1}]`;
+      const placeholderIndex = textoProcessado.indexOf(placeholder, lastIndex);
+
+      if (placeholderIndex !== -1) {
+        // Adicionar texto antes da lacuna
+        if (placeholderIndex > lastIndex) {
+          elementos.push(
+            <span key={`text-${index}`}>
+              {textoProcessado.slice(lastIndex, placeholderIndex)}
+            </span>
+          );
+        }
+
+        // Adicionar resposta correta destacada
+        const respostaCorreta = lacuna.respostasAceitas[0] || "";
+        elementos.push(
+          <strong
+            key={`resposta-${index}`}
+            className="text-green-600 bg-green-500/20 px-1 rounded"
+          >
+            {respostaCorreta}
+          </strong>
+        );
+
+        lastIndex = placeholderIndex + placeholder.length;
+      }
+    });
+
+    // Adicionar texto restante
+    if (lastIndex < textoProcessado.length) {
+      elementos.push(
+        <span key="text-final">
+          {textoProcessado.slice(lastIndex)}
+        </span>
+      );
+    }
+
+    return <div className="leading-relaxed">{elementos}</div>;
   };
 
   return (
@@ -651,6 +882,137 @@ export default async function ResultadoProvaPage({
                             </div>
                           </div>
                         )}
+
+                        {/* Texto completo com respostas corretas (para LACUNA) */}
+                        {questao.tipo === "LACUNA" && (
+                          <div className="mt-4">
+                            <h4 className="text-sm font-semibold mb-2">
+                              Texto Completo com Respostas Corretas:
+                            </h4>
+                            <div className="bg-muted/30 p-4 rounded-lg text-sm border">
+                              {renderTextoComRespostas(questao)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Imagem com áreas marcadas (para HOTSPOT) */}
+                        {questao.tipo === "HOTSPOT" && (() => {
+                          const config = questao.configuracao as {
+                            imagemUrl?: string;
+                            areas?: { id: string; x: number; y: number; largura: number; altura: number; correta: boolean; label?: string }[];
+                            multiplosCliques?: boolean;
+                          } | null;
+
+                          if (!config?.imagemUrl) return null;
+
+                          const respostaData = resposta?.resposta as { cliques?: { x: number; y: number; areaId?: string }[] } | null;
+                          const cliques = respostaData?.cliques || [];
+
+                          const isAreaClicada = (areaId: string) => cliques.some((c) => c.areaId === areaId);
+
+                          const areasCorretas = config.areas?.filter((a) => a.correta) || [];
+                          const acertos = areasCorretas.filter((a) => isAreaClicada(a.id)).length;
+                          const erros = (config.areas?.filter((a) => !a.correta && isAreaClicada(a.id)) || []).length;
+                          const cliquesForaDasAreas = cliques.filter((c) => !c.areaId).length;
+                          const isCorreto = acertos === areasCorretas.length && erros === 0 && cliquesForaDasAreas === 0;
+
+                          return (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-semibold mb-2">
+                                Imagem com Áreas Marcadas:
+                              </h4>
+                              <div className={cn(
+                                "relative overflow-hidden rounded-lg border",
+                                isCorreto ? "ring-2 ring-green-500" : "ring-2 ring-red-500"
+                              )}>
+                                <img
+                                  src={config.imagemUrl}
+                                  alt="Imagem da questão"
+                                  className="w-full h-auto"
+                                />
+
+                                {/* Áreas */}
+                                {config.areas?.map((area) => {
+                                  const foiClicada = isAreaClicada(area.id);
+                                  const isCorretoClick = area.correta && foiClicada;
+                                  const isErroClick = !area.correta && foiClicada;
+                                  const isMissed = area.correta && !foiClicada;
+
+                                  return (
+                                    <div
+                                      key={area.id}
+                                      className={cn(
+                                        "absolute border-2 transition-all flex items-center justify-center",
+                                        isCorretoClick && "border-green-500 bg-green-500/30",
+                                        isErroClick && "border-red-500 bg-red-500/30",
+                                        isMissed && "border-orange-500 bg-orange-500/30 border-dashed",
+                                        !foiClicada && !area.correta && "border-gray-400 bg-gray-400/10"
+                                      )}
+                                      style={{
+                                        left: `${area.x}%`,
+                                        top: `${area.y}%`,
+                                        width: `${area.largura}%`,
+                                        height: `${area.altura}%`,
+                                      }}
+                                    >
+                                      {isCorretoClick && <CheckCircle className="h-6 w-6 text-green-600" />}
+                                      {isErroClick && <XCircle className="h-6 w-6 text-red-600" />}
+                                      {isMissed && (
+                                        <span className="text-orange-600 text-xs font-medium bg-orange-100/80 px-1 rounded">
+                                          Faltou
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                                {/* Marcadores de cliques */}
+                                {cliques.map((clique, index) => {
+                                  const areaClicada = config.areas?.find((a) => a.id === clique.areaId);
+                                  const isCliqueCorreto = areaClicada?.correta ?? false;
+
+                                  return (
+                                    <div
+                                      key={index}
+                                      className={cn(
+                                        "absolute w-6 h-6 -ml-3 -mt-3 rounded-full border-2 flex items-center justify-center",
+                                        isCliqueCorreto
+                                          ? "bg-green-500 border-green-600 text-white"
+                                          : "bg-red-500 border-red-600 text-white"
+                                      )}
+                                      style={{
+                                        left: `${clique.x}%`,
+                                        top: `${clique.y}%`,
+                                      }}
+                                    >
+                                      {isCliqueCorreto ? (
+                                        <CheckCircle className="h-3 w-3" />
+                                      ) : (
+                                        <XCircle className="h-3 w-3" />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Legenda */}
+                              <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <div className="w-4 h-4 border-2 border-green-500 bg-green-500/30 rounded" />
+                                  <span>Área correta clicada</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-4 h-4 border-2 border-red-500 bg-red-500/30 rounded" />
+                                  <span>Área incorreta clicada</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-4 h-4 border-2 border-dashed border-orange-500 bg-orange-500/30 rounded" />
+                                  <span>Área correta não clicada</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Explicação */}
                         {questao.explicacao && (

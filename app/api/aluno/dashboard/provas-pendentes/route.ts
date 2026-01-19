@@ -75,18 +75,27 @@ export async function GET(request: NextRequest) {
     const provasPendentes = turmaProvas
       .filter(tp => {
         const tentativasFeitas = tentativasPorProva.get(tp.prova.id) || 0;
-        const maxTentativas = tp.prova.tentativasMax || 999;
-        return tentativasFeitas < maxTentativas;
+        // null = tentativas ilimitadas
+        if (tp.prova.tentativasMax === null) return true;
+        return tentativasFeitas < tp.prova.tentativasMax;
       })
-      .map(tp => ({
-        id: tp.prova.id,
-        titulo: tp.prova.nome,
-        turma: tp.turma.nome,
-        turmaId: tp.turma.id,
-        prazo: tp.dataFim?.toISOString() || null,
-        tentativasRestantes: (tp.prova.tentativasMax || 999) - (tentativasPorProva.get(tp.prova.id) || 0),
-        tempoLimite: tp.prova.tempoLimite,
-      }));
+      .map(tp => {
+        const tentativasFeitas = tentativasPorProva.get(tp.prova.id) || 0;
+        // null = tentativas ilimitadas
+        const tentativasRestantes = tp.prova.tentativasMax === null
+          ? null
+          : tp.prova.tentativasMax - tentativasFeitas;
+
+        return {
+          id: tp.prova.id,
+          titulo: tp.prova.nome,
+          turma: tp.turma.nome,
+          turmaId: tp.turma.id,
+          prazo: tp.dataFim?.toISOString() || null,
+          tentativasRestantes,
+          tempoLimite: tp.prova.tempoLimite,
+        };
+      });
 
     // Remove duplicates (same prova in multiple turmas)
     const uniqueProvas = provasPendentes.reduce((acc, prova) => {

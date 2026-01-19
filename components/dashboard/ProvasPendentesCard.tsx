@@ -13,7 +13,7 @@ interface ProvaPendente {
   turma: string;
   turmaId: string;
   prazo: string | null;
-  tentativasRestantes: number;
+  tentativasRestantes: number | null; // null = ilimitadas
   tempoLimite: number | null;
 }
 
@@ -100,7 +100,9 @@ export function ProvasPendentesCard({ provas, loading = false }: ProvasPendentes
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {prova.tentativasRestantes} tentativa{prova.tentativasRestantes !== 1 ? "s" : ""}
+                        {prova.tentativasRestantes === null
+                          ? "Ilimitadas"
+                          : `${prova.tentativasRestantes} tentativa${prova.tentativasRestantes !== 1 ? "s" : ""}`}
                       </span>
                     </div>
                   </div>
