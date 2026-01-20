@@ -14,13 +14,14 @@ enum Role {
 }
 
 model User {
-  id            String            @id @default(cuid())
-  nome          String
-  email         String            @unique
-  emailVerified DateTime?
-  senha         String?
-  avatar        String?
-  role          Role              @default(ALUNO)
+  id                 String            @id @default(cuid())
+  nome               String
+  email              String            @unique
+  emailVerified      DateTime?
+  senha              String?
+  avatar             String?
+  role               Role              @default(ALUNO)
+  mustChangePassword Boolean           @default(false)
   accounts      Account[]
   sessions      Session[]
   simulados     Simulado[]

@@ -236,10 +236,18 @@ export default function AdminPage() {
   const handleCreateUser = async () => {
     setSaving(true);
     try {
+      // Não enviar senha vazia - usar senha padrão do backend
+      const dataToSend = {
+        nome: formData.nome,
+        email: formData.email,
+        role: formData.role,
+        ...(formData.senha && { senha: formData.senha }),
+      };
+
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(dataToSend),
       });
 
       if (response.ok) {
@@ -607,7 +615,7 @@ export default function AdminPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="senha">Senha</Label>
+                        <Label htmlFor="senha">Senha (opcional)</Label>
                         <Input
                           id="senha"
                           type="password"
@@ -615,8 +623,11 @@ export default function AdminPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, senha: e.target.value })
                           }
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="Deixe vazio para usar Mudar@123"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Se não informar, o usuário receberá a senha padrão e precisará alterá-la no primeiro login.
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="role">Papel</Label>

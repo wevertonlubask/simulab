@@ -9,6 +9,7 @@ declare module "next-auth" {
   interface User {
     role: Role;
     nome: string;
+    mustChangePassword?: boolean;
   }
   interface Session {
     user: {
@@ -17,6 +18,7 @@ declare module "next-auth" {
       nome: string;
       role: Role;
       avatar?: string | null;
+      mustChangePassword?: boolean;
     };
   }
 }
@@ -26,6 +28,7 @@ declare module "@auth/core/jwt" {
     id: string;
     role: Role;
     nome: string;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -75,17 +78,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           nome: user.nome,
           role: user.role,
           image: user.avatar,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id!;
         token.role = user.role;
         token.nome = user.nome;
+        token.mustChangePassword = user.mustChangePassword;
       }
+
+      // Atualizar o token quando a sessão é atualizada (após mudar senha)
+      if (trigger === "update") {
+        const dbUser = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { mustChangePassword: true },
+        });
+        if (dbUser) {
+          token.mustChangePassword = dbUser.mustChangePassword;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -93,6 +110,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
         session.user.nome = token.nome as string;
+        session.user.mustChangePassword = token.mustChangePassword as boolean;
       }
       return session;
     },

@@ -162,10 +162,7 @@ function LoginForm() {
             Entrar
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            Não tem uma conta?{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              Cadastre-se
-            </Link>
+            O acesso é feito mediante convite do administrador.
           </p>
         </CardFooter>
       </form>

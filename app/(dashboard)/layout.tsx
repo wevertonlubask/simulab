@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ChangePasswordWrapper } from "@/components/auth/ChangePasswordWrapper";
 
 export default async function DashboardRootLayout({
   children,
@@ -22,7 +23,9 @@ export default async function DashboardRootLayout({
         avatar: session.user.avatar,
       }}
     >
-      {children}
+      <ChangePasswordWrapper mustChangePassword={session.user.mustChangePassword}>
+        {children}
+      </ChangePasswordWrapper>
     </DashboardLayout>
   );
 }

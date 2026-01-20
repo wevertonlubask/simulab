@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { requireRoleApi, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
 export async function GET(request: Request) {
   try {
-    await requireRole(["SUPERADMIN"]);
+    await requireRoleApi(["SUPERADMIN"]);
     const { searchParams } = new URL(request.url);
 
     const page = parseInt(searchParams.get("page") || "1");
@@ -60,6 +60,9 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Erro ao buscar usuários:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
@@ -68,25 +71,39 @@ export async function GET(request: Request) {
   }
 }
 
+// Senha padrão para novos usuários
+const DEFAULT_PASSWORD = "Mudar@123";
+
 const createUserSchema = z.object({
   nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   email: z.string().email("Email inválido"),
-  senha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  senha: z.union([
+    z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    z.string().length(0), // Permite string vazia
+  ]).optional(),
   role: z.enum(["SUPERADMIN", "DOCENTE", "ALUNO"]),
 });
 
 export async function POST(request: Request) {
   try {
-    await requireRole(["SUPERADMIN"]);
+    console.log("[POST /api/admin/users] Iniciando...");
+
+    const currentUser = await requireRoleApi(["SUPERADMIN"]);
+    console.log("[POST /api/admin/users] Usuário autenticado:", currentUser.email);
+
     const body = await request.json();
+    console.log("[POST /api/admin/users] Body recebido:", JSON.stringify(body));
 
     const validation = createUserSchema.safeParse(body);
     if (!validation.success) {
+      console.log("[POST /api/admin/users] Validação falhou:", validation.error.errors);
       return NextResponse.json(
         { error: validation.error.errors[0].message },
         { status: 400 }
       );
     }
+
+    console.log("[POST /api/admin/users] Validação OK, verificando email existente...");
 
     // Verificar se email já existe
     const existingUser = await db.user.findUnique({
@@ -94,20 +111,31 @@ export async function POST(request: Request) {
     });
 
     if (existingUser) {
+      console.log("[POST /api/admin/users] Email já existe");
       return NextResponse.json(
         { error: "Este email já está em uso" },
         { status: 400 }
       );
     }
 
-    // Criar usuário
-    const senhaHash = await bcrypt.hash(validation.data.senha, 10);
+    console.log("[POST /api/admin/users] Email disponível, criando usuário...");
+
+    // Criar usuário com senha padrão ou personalizada
+    // Tratar string vazia como sem senha (usar padrão)
+    const senhaInformada = validation.data.senha && validation.data.senha.trim().length > 0;
+    const senhaParaHash = senhaInformada ? validation.data.senha : DEFAULT_PASSWORD;
+    const senhaHash = await bcrypt.hash(senhaParaHash, 10);
+    const usandoSenhaPadrao = !senhaInformada;
+
+    console.log("[POST /api/admin/users] Senha hashada, usando senha padrão:", usandoSenhaPadrao);
+
     const user = await db.user.create({
       data: {
         nome: validation.data.nome,
         email: validation.data.email,
         senha: senhaHash,
         role: validation.data.role,
+        mustChangePassword: usandoSenhaPadrao,
       },
       select: {
         id: true,
@@ -115,12 +143,19 @@ export async function POST(request: Request) {
         email: true,
         role: true,
         createdAt: true,
+        mustChangePassword: true,
       },
     });
 
+    console.log("[POST /api/admin/users] Usuário criado com sucesso:", user.id);
+
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {
-    console.error("Erro ao criar usuário:", error);
+    if (error instanceof AuthError) {
+      console.log("[POST /api/admin/users] AuthError:", error.message);
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[POST /api/admin/users] Erro:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 }

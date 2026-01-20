@@ -26,10 +26,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Link href="/login">
-              <Button variant="ghost">Entrar</Button>
-            </Link>
-            <Link href="/register">
-              <Button>Cadastrar</Button>
+              <Button>Entrar</Button>
             </Link>
           </div>
         </div>
@@ -46,15 +43,10 @@ export default function HomePage() {
           Cisco, AWS, Microsoft, CompTIA e muito mais.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Link href="/register">
-            <Button size="lg" className="gap-2">
-              Começar Agora
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
           <Link href="/login">
-            <Button size="lg" variant="outline">
-              Já tenho conta
+            <Button size="lg" className="gap-2">
+              Acessar Plataforma
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
         </div>
@@ -161,12 +153,12 @@ export default function HomePage() {
             Pronto para começar sua jornada?
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-            Junte-se a milhares de profissionais que já usam o Simulab para se
-            preparar para suas certificações.
+            Acesse a plataforma e comece a se preparar para suas certificações.
+            O acesso é feito mediante convite do administrador.
           </p>
-          <Link href="/register" className="mt-8 inline-block">
+          <Link href="/login" className="mt-8 inline-block">
             <Button size="lg" className="gap-2">
-              Criar conta grátis
+              Acessar Plataforma
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

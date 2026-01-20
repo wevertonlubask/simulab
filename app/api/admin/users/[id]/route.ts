@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { requireRoleApi, AuthError } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -10,7 +10,7 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireRole(["SUPERADMIN"]);
+    await requireRoleApi(["SUPERADMIN"]);
     const { id } = await params;
 
     const user = await db.user.findUnique({
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         avatar: true,
         createdAt: true,
         updatedAt: true,
+        mustChangePassword: true,
         _count: {
           select: {
             turmasAluno: true,
@@ -44,6 +45,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ user });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Erro ao buscar usuário:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
@@ -57,11 +61,12 @@ const updateUserSchema = z.object({
   email: z.string().email("Email inválido").optional(),
   role: z.enum(["SUPERADMIN", "DOCENTE", "ALUNO"]).optional(),
   senha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").optional(),
+  resetPassword: z.boolean().optional(), // Nova opção para resetar senha
 });
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const currentUser = await requireRole(["SUPERADMIN"]);
+    const currentUser = await requireRoleApi(["SUPERADMIN"]);
     const { id } = await params;
     const body = await request.json();
 
@@ -115,7 +120,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (validation.data.nome) updateData.nome = validation.data.nome;
     if (validation.data.email) updateData.email = validation.data.email;
     if (validation.data.role) updateData.role = validation.data.role;
-    if (validation.data.senha) {
+
+    // Se resetPassword for true, usa senha padrão e força troca de senha
+    if (validation.data.resetPassword) {
+      updateData.senha = await bcrypt.hash("Mudar@123", 10);
+      updateData.mustChangePassword = true;
+    } else if (validation.data.senha) {
       updateData.senha = await bcrypt.hash(validation.data.senha, 10);
     }
 
@@ -128,11 +138,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         email: true,
         role: true,
         updatedAt: true,
+        mustChangePassword: true,
       },
     });
 
     return NextResponse.json({ user });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Erro ao atualizar usuário:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
@@ -143,7 +157,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const currentUser = await requireRole(["SUPERADMIN"]);
+    const currentUser = await requireRoleApi(["SUPERADMIN"]);
     const { id } = await params;
 
     // Não permitir excluir a si mesmo
@@ -173,6 +187,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ message: "Usuário excluído com sucesso" });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Erro ao excluir usuário:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
