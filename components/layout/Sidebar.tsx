@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -28,6 +30,12 @@ import {
   Shield,
 } from "lucide-react";
 import type { Role } from "@prisma/client";
+
+interface LogoConfig {
+  logo_light: string | null;
+  logo_dark: string | null;
+  logo_favicon: string | null;
+}
 
 interface SidebarProps {
   role: Role;
@@ -125,7 +133,34 @@ const alunoNavItems: NavItem[] = [
 
 export function Sidebar({ role, collapsed = false, onCollapsedChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
+  const [logos, setLogos] = useState<LogoConfig | null>(null);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const { resolvedTheme } = useTheme();
+
+  // Carregar logos do sistema
+  useEffect(() => {
+    setMounted(true);
+    async function loadLogos() {
+      try {
+        const response = await fetch("/api/admin/config/logo");
+        if (response.ok) {
+          const data = await response.json();
+          setLogos(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar logos:", error);
+      }
+    }
+    loadLogos();
+  }, []);
+
+  // Determinar qual logo usar baseado no tema
+  const currentLogo = mounted
+    ? resolvedTheme === "dark"
+      ? logos?.logo_dark || logos?.logo_light
+      : logos?.logo_light || logos?.logo_dark
+    : null;
 
   const baseNavItems =
     role === "DOCENTE" || role === "SUPERADMIN"
@@ -152,20 +187,44 @@ export function Sidebar({ role, collapsed = false, onCollapsedChange }: SidebarP
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-4">
+        <div className="flex h-16 items-center justify-center px-3">
           {!isCollapsed && (
-            <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-lg font-bold text-primary-foreground">S</span>
-              </div>
-              <span className="text-xl font-bold text-primary">Simulab</span>
+            <Link href="/" className="flex items-center justify-center w-full">
+              {currentLogo ? (
+                <Image
+                  src={currentLogo}
+                  alt="Logo"
+                  width={200}
+                  height={48}
+                  className="object-contain w-full max-w-[200px] h-auto"
+                  unoptimized
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                    <span className="text-lg font-bold text-primary-foreground">S</span>
+                  </div>
+                  <span className="text-xl font-bold text-primary">Simulab</span>
+                </div>
+              )}
             </Link>
           )}
           {isCollapsed && (
             <Link href="/" className="mx-auto">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-lg font-bold text-primary-foreground">S</span>
-              </div>
+              {currentLogo ? (
+                <Image
+                  src={currentLogo}
+                  alt="Logo"
+                  width={32}
+                  height={32}
+                  className="object-contain"
+                  unoptimized
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                  <span className="text-lg font-bold text-primary-foreground">S</span>
+                </div>
+              )}
             </Link>
           )}
         </div>

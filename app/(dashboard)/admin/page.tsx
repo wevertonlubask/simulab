@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,9 @@ import {
   UserCog,
   BarChart3,
   HelpCircle,
+  Settings,
 } from "lucide-react";
+import { LogoUploader, LogoUploaderSkeleton } from "@/components/admin/LogoUploader";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -132,6 +134,12 @@ const roleBadgeVariants: Record<string, "default" | "secondary" | "outline"> = {
   ALUNO: "outline",
 };
 
+interface LogoConfig {
+  logo_light: string | null;
+  logo_dark: string | null;
+  logo_favicon: string | null;
+}
+
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -142,6 +150,8 @@ export default function AdminPage() {
     total: 0,
     totalPages: 0,
   });
+  const [logos, setLogos] = useState<LogoConfig | null>(null);
+  const [loadingLogos, setLoadingLogos] = useState(true);
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState("");
@@ -177,6 +187,26 @@ export default function AdminPage() {
 
     loadStats();
   }, []);
+
+  // Carregar logos
+  const loadLogos = useCallback(async () => {
+    try {
+      setLoadingLogos(true);
+      const response = await fetch("/api/admin/config/logo");
+      if (response.ok) {
+        const data = await response.json();
+        setLogos(data);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar logos:", error);
+    } finally {
+      setLoadingLogos(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLogos();
+  }, [loadLogos]);
 
   // Carregar usuários
   useEffect(() => {
@@ -337,6 +367,10 @@ export default function AdminPage() {
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
             Usuários
+          </TabsTrigger>
+          <TabsTrigger value="settings">
+            <Settings className="h-4 w-4 mr-2" />
+            Configurações
           </TabsTrigger>
         </TabsList>
 
@@ -827,6 +861,28 @@ export default function AdminPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Tab Configurações */}
+        <TabsContent value="settings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Logo do Sistema</CardTitle>
+              <CardDescription>
+                Configure as logos para tema claro e escuro, além do favicon
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingLogos ? (
+                <LogoUploaderSkeleton />
+              ) : (
+                <LogoUploader
+                  initialLogos={logos || undefined}
+                  onLogoChange={loadLogos}
+                />
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
