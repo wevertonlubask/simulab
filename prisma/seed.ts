@@ -1,12 +1,213 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, CategoriaConquista } from "@prisma/client";
 import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+// Conquistas disponíveis no sistema - Fase 6 Gamificação
+const CONQUISTAS = [
+  // CATEGORIA: PROVAS
+  {
+    codigo: "primeira_prova",
+    nome: "Primeira Prova",
+    descricao: "Complete sua primeira prova",
+    icone: "🥉",
+    categoria: "PROVAS" as CategoriaConquista,
+    condicao: { tipo: "provas_total", valor: 1 },
+    xpBonus: 50,
+    ordem: 1,
+  },
+  {
+    codigo: "maratonista",
+    nome: "Maratonista",
+    descricao: "Complete 10 provas",
+    icone: "🥈",
+    categoria: "PROVAS" as CategoriaConquista,
+    condicao: { tipo: "provas_total", valor: 10 },
+    xpBonus: 100,
+    ordem: 2,
+  },
+  {
+    codigo: "incansavel",
+    nome: "Incansável",
+    descricao: "Complete 50 provas",
+    icone: "🥇",
+    categoria: "PROVAS" as CategoriaConquista,
+    condicao: { tipo: "provas_total", valor: 50 },
+    xpBonus: 200,
+    ordem: 3,
+  },
+  {
+    codigo: "veterano",
+    nome: "Veterano",
+    descricao: "Complete 100 provas",
+    icone: "💎",
+    categoria: "PROVAS" as CategoriaConquista,
+    condicao: { tipo: "provas_total", valor: 100 },
+    xpBonus: 500,
+    ordem: 4,
+  },
+  {
+    codigo: "lendario",
+    nome: "Lendário",
+    descricao: "Complete 500 provas",
+    icone: "👑",
+    categoria: "PROVAS" as CategoriaConquista,
+    condicao: { tipo: "provas_total", valor: 500 },
+    xpBonus: 1000,
+    ordem: 5,
+  },
+  // CATEGORIA: NOTAS
+  {
+    codigo: "aprovado",
+    nome: "Aprovado!",
+    descricao: "Seja aprovado em uma prova",
+    icone: "⭐",
+    categoria: "NOTAS" as CategoriaConquista,
+    condicao: { tipo: "aprovacoes_total", valor: 1 },
+    xpBonus: 50,
+    ordem: 6,
+  },
+  {
+    codigo: "destaque",
+    nome: "Destaque",
+    descricao: "Tire nota acima de 90%",
+    icone: "🌟",
+    categoria: "NOTAS" as CategoriaConquista,
+    condicao: { tipo: "nota_minima", valor: 90 },
+    xpBonus: 100,
+    ordem: 7,
+  },
+  {
+    codigo: "perfeito",
+    nome: "Perfeição",
+    descricao: "Tire 100% em uma prova",
+    icone: "🏆",
+    categoria: "NOTAS" as CategoriaConquista,
+    condicao: { tipo: "nota_minima", valor: 100 },
+    xpBonus: 200,
+    ordem: 8,
+  },
+  {
+    codigo: "consistente",
+    nome: "Consistente",
+    descricao: "5 aprovações seguidas",
+    icone: "💯",
+    categoria: "NOTAS" as CategoriaConquista,
+    condicao: { tipo: "aprovacoes_seguidas", valor: 5 },
+    xpBonus: 150,
+    ordem: 9,
+  },
+  {
+    codigo: "imparavel",
+    nome: "Imparável",
+    descricao: "10 aprovações seguidas",
+    icone: "🔥",
+    categoria: "NOTAS" as CategoriaConquista,
+    condicao: { tipo: "aprovacoes_seguidas", valor: 10 },
+    xpBonus: 300,
+    ordem: 10,
+  },
+  // CATEGORIA: STREAKS
+  {
+    codigo: "focado",
+    nome: "Focado",
+    descricao: "3 dias seguidos estudando",
+    icone: "🔥",
+    categoria: "STREAKS" as CategoriaConquista,
+    condicao: { tipo: "streak_dias", valor: 3 },
+    xpBonus: 50,
+    ordem: 11,
+  },
+  {
+    codigo: "dedicado",
+    nome: "Dedicado",
+    descricao: "7 dias seguidos estudando",
+    icone: "🔥🔥",
+    categoria: "STREAKS" as CategoriaConquista,
+    condicao: { tipo: "streak_dias", valor: 7 },
+    xpBonus: 100,
+    ordem: 12,
+  },
+  {
+    codigo: "comprometido",
+    nome: "Comprometido",
+    descricao: "30 dias seguidos estudando",
+    icone: "🔥🔥🔥",
+    categoria: "STREAKS" as CategoriaConquista,
+    condicao: { tipo: "streak_dias", valor: 30 },
+    xpBonus: 500,
+    ordem: 13,
+  },
+  {
+    codigo: "relampago",
+    nome: "Relâmpago",
+    descricao: "100 dias seguidos estudando",
+    icone: "⚡",
+    categoria: "STREAKS" as CategoriaConquista,
+    condicao: { tipo: "streak_dias", valor: 100 },
+    xpBonus: 1000,
+    ordem: 14,
+  },
+  // CATEGORIA: ESPECIAIS
+  {
+    codigo: "coruja",
+    nome: "Coruja",
+    descricao: "Faça prova após meia-noite",
+    icone: "🦉",
+    categoria: "ESPECIAIS" as CategoriaConquista,
+    condicao: { tipo: "horario", valor: "noturno" },
+    xpBonus: 30,
+    ordem: 15,
+  },
+  {
+    codigo: "madrugador",
+    nome: "Madrugador",
+    descricao: "Faça prova antes das 7h",
+    icone: "🌅",
+    categoria: "ESPECIAIS" as CategoriaConquista,
+    condicao: { tipo: "horario", valor: "madrugada" },
+    xpBonus: 30,
+    ordem: 16,
+  },
+  {
+    codigo: "veloz",
+    nome: "Veloz",
+    descricao: "Complete prova em <50% do tempo",
+    icone: "⚡",
+    categoria: "ESPECIAIS" as CategoriaConquista,
+    condicao: { tipo: "tempo_percentual", valor: 50 },
+    xpBonus: 50,
+    ordem: 17,
+  },
+  {
+    codigo: "sniper",
+    nome: "Sniper",
+    descricao: "Acerte 20 questões seguidas",
+    icone: "🎯",
+    categoria: "ESPECIAIS" as CategoriaConquista,
+    condicao: { tipo: "acertos_seguidos", valor: 20 },
+    xpBonus: 100,
+    ordem: 18,
+  },
+  {
+    codigo: "explorador",
+    nome: "Explorador",
+    descricao: "Faça provas de 5 categorias diferentes",
+    icone: "📚",
+    categoria: "ESPECIAIS" as CategoriaConquista,
+    condicao: { tipo: "categorias_diferentes", valor: 5 },
+    xpBonus: 150,
+    ordem: 19,
+  },
+];
 
 async function main() {
   console.log("🌱 Iniciando seed...");
 
   // Limpar dados existentes
+  await prisma.userConquista.deleteMany();
+  await prisma.conquista.deleteMany();
+  await prisma.userGamification.deleteMany();
   await prisma.provaQuestao.deleteMany();
   await prisma.prova.deleteMany();
   await prisma.alternativa.deleteMany();
@@ -15,6 +216,14 @@ async function main() {
   await prisma.user.deleteMany();
 
   console.log("🗑️  Dados anteriores removidos");
+
+  // Criar conquistas
+  for (const conquista of CONQUISTAS) {
+    await prisma.conquista.create({
+      data: conquista,
+    });
+  }
+  console.log(`🏆 ${CONQUISTAS.length} conquistas criadas`);
 
   // Criar usuário docente
   const senhaHash = await hash("123456", 12);

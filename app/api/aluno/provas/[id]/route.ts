@@ -107,10 +107,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     const tentativasRealizadas = tentativas.length;
-    const tentativasRestantes = Math.max(
-      0,
-      prova.tentativasMax - tentativasRealizadas
-    );
+    const tentativasRestantes = prova.tentativasMax === null
+      ? Infinity
+      : Math.max(0, prova.tentativasMax - tentativasRealizadas);
 
     // Verificar se existe tentativa em andamento
     const tentativaEmAndamento = tentativas.find(

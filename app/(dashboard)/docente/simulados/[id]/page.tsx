@@ -15,11 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SimuladoForm } from "@/components/simulados/SimuladoForm";
 import { StatusBadge } from "@/components/simulados/StatusBadge";
+import { DuplicarSimuladoButton } from "@/components/simulados/DuplicarSimuladoButton";
 import {
   ChevronLeft,
   FileQuestion,
   ClipboardList,
-  BarChart3,
 } from "lucide-react";
 
 interface PageProps {
@@ -100,7 +100,7 @@ export default async function SimuladoPage({ params }: PageProps) {
             {simulado.subcategoria && ` - ${simulado.subcategoria}`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href={`/docente/simulados/${simulado.id}/questoes`}>
             <Button variant="outline">
               <FileQuestion className="mr-2 h-4 w-4" />
@@ -113,6 +113,10 @@ export default async function SimuladoPage({ params }: PageProps) {
               Provas ({simulado._count.provas})
             </Button>
           </Link>
+          <DuplicarSimuladoButton
+            simuladoId={simulado.id}
+            simuladoNome={simulado.nome}
+          />
         </div>
       </div>
 

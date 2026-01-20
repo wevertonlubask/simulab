@@ -8,6 +8,7 @@ export { ProvasPendentesCard } from "./ProvasPendentesCard";
 export { UltimasProvasCard } from "./UltimasProvasCard";
 export { QuestoesRevisarCard } from "./QuestoesRevisarCard";
 export { StreakWidget } from "./StreakWidget";
+export { GamificationWidget } from "./GamificationWidget";
 
 // Docente Dashboard Components
 export { RealizacoesChart } from "./RealizacoesChart";

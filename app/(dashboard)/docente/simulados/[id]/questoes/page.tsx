@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { QuestoesList } from "@/components/questoes/QuestoesList";
-import { ChevronLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, FileUp } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -57,12 +58,20 @@ export default async function QuestoesPage({ params }: PageProps) {
         </Link>
       </div>
 
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Questões</h1>
-        <p className="text-muted-foreground">
-          {simulado.nome} - {simulado.categoria}
-          {simulado.subcategoria && ` / ${simulado.subcategoria}`}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Questões</h1>
+          <p className="text-muted-foreground">
+            {simulado.nome} - {simulado.categoria}
+            {simulado.subcategoria && ` / ${simulado.subcategoria}`}
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link href={`/docente/simulados/${simulado.id}/importar`}>
+            <FileUp className="mr-2 h-4 w-4" />
+            Importar Questões
+          </Link>
+        </Button>
       </div>
 
       <QuestoesList simuladoId={simulado.id} />

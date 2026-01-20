@@ -26,24 +26,21 @@ export function CertificadoDownloadCard({
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const response = await fetch(`/api/aluno/certificados/${tentativaId}`, {
-        method: "POST",
-      });
+      const response = await fetch(`/api/certificados/${tentativaId}`);
 
       if (response.ok) {
-        const data = await response.json();
-        setCertificadoCodigo(data.codigo);
+        const result = await response.json();
+        setCertificadoCodigo(result.certificado.codigo);
         gerarCertificadoPDF({
-          codigo: data.codigo,
-          titulo: data.titulo,
-          categoria: data.categoria,
-          nota: data.nota,
-          notaMinima: data.notaMinima,
-          dataEmissao: data.dataEmissao,
-          aluno: data.aluno,
-          simulado: data.simulado,
-          prova: data.prova,
-          tentativa: data.tentativa,
+          codigo: result.certificado.codigo,
+          titulo: result.dados.titulo,
+          categoria: result.dados.categoria,
+          nota: result.dados.nota,
+          notaMinima: result.dados.notaMinima,
+          dataEmissao: result.dados.dataEmissao,
+          aluno: { nome: result.dados.alunoNome },
+          simulado: { nome: result.dados.titulo, docente: "SimulaB" },
+          prova: { nome: result.dados.titulo },
         });
       } else {
         const error = await response.json();
@@ -87,7 +84,7 @@ export function CertificadoDownloadCard({
             {certificadoCodigo && (
               <Button variant="outline" asChild>
                 <Link
-                  href={`/certificados/validar/${certificadoCodigo}`}
+                  href={`/verificar/${certificadoCodigo}`}
                   target="_blank"
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />

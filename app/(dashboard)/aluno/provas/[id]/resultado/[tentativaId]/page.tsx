@@ -547,7 +547,7 @@ export default async function ResultadoProvaPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 animate-fade-in">
         <Button variant="ghost" size="icon" asChild>
           <Link href={`/aluno/provas/${provaId}`}>
             <ArrowLeft className="h-5 w-5" />
@@ -571,34 +571,37 @@ export default async function ResultadoProvaPage({
 
       {/* Status Card */}
       <Card
-        className={
+        className={cn(
+          "animate-scale-in transition-all duration-300",
           aprovado
             ? "border-green-500/50 bg-green-500/5"
             : "border-red-500/50 bg-red-500/5"
-        }
+        )}
       >
         <CardContent className="pt-6">
           <div className="flex flex-col items-center text-center">
             <div
-              className={`flex h-20 w-20 items-center justify-center rounded-full ${
+              className={cn(
+                "flex h-20 w-20 items-center justify-center rounded-full transition-transform hover:scale-110",
                 aprovado ? "bg-green-500/20" : "bg-red-500/20"
-              }`}
+              )}
             >
               {aprovado ? (
-                <Trophy className="h-10 w-10 text-green-500" />
+                <Trophy className="h-10 w-10 text-green-500 animate-bounce-in" />
               ) : (
-                <Target className="h-10 w-10 text-red-500" />
+                <Target className="h-10 w-10 text-red-500 animate-fade-in" />
               )}
             </div>
             <h2
-              className={`mt-4 text-2xl font-bold ${
+              className={cn(
+                "mt-4 text-2xl font-bold",
                 aprovado ? "text-green-600" : "text-red-600"
-              }`}
+              )}
             >
               {aprovado ? "Parabéns! Você foi aprovado!" : "Não foi dessa vez..."}
             </h2>
             {podeVerResultado ? (
-              <div className="mt-4 text-5xl font-bold">
+              <div className="mt-4 text-5xl font-bold tabular-nums">
                 {tentativa.nota?.toFixed(1)}%
               </div>
             ) : (
@@ -628,7 +631,7 @@ export default async function ResultadoProvaPage({
 
       {/* Estatísticas */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="animate-fade-in-up transition-all duration-300 hover:shadow-md" style={{ animationDelay: "100ms" }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Acertos</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />

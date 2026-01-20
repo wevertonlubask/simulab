@@ -116,7 +116,7 @@ export default async function AlunoProvaPage({ params }: ProvaPageProps) {
   const tentativasIlimitadas = prova.tentativasMax === null;
   const tentativasRestantes = tentativasIlimitadas
     ? Infinity
-    : Math.max(0, prova.tentativasMax - tentativasRealizadas);
+    : Math.max(0, (prova.tentativasMax ?? 0) - tentativasRealizadas);
 
   // Verificar se existe tentativa em andamento
   const tentativaEmAndamento = tentativas.find(

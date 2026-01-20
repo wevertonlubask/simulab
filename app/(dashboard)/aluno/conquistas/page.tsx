@@ -1,31 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Award,
-  BookOpen,
   CheckCircle,
-  Crown,
-  Flame,
-  GraduationCap,
   Lock,
-  Medal,
-  Rocket,
-  Shield,
   Star,
-  Target,
-  TrendingUp,
   Trophy,
+  Flame,
+  Target,
+  Award,
   Zap,
-  Book,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { XPBar } from "@/components/gamification/XPBar";
+import { NivelBadge } from "@/components/gamification/NivelBadge";
+import { StreakCounter } from "@/components/gamification/StreakCounter";
+import { ConquistaCard } from "@/components/gamification/ConquistaCard";
+import { LeaderboardTable } from "@/components/gamification/LeaderboardTable";
 
 interface Conquista {
   id: string;
@@ -33,114 +29,135 @@ interface Conquista {
   nome: string;
   descricao: string;
   icone: string;
-  pontos: number;
-  raridade: string;
+  categoria: string;
+  xpBonus: number;
+  ordem: number;
   desbloqueada: boolean;
-  desbloqueadaEm?: string;
+  desbloqueadaEm?: string | null;
+  progresso: number;
+  progressoAtual: number;
+  progressoTotal: number;
 }
 
-interface Estatisticas {
-  total: number;
-  desbloqueadas: number;
-  pontosTotais: number;
+interface NivelInfo {
+  nivel: number;
+  nome: string;
+  xpAtual: number;
+  xpNecessario: number;
+  xpProximoNivel: number;
   progresso: number;
 }
 
-const iconeMap: Record<string, React.ReactNode> = {
-  rocket: <Rocket className="h-6 w-6" />,
-  "check-circle": <CheckCircle className="h-6 w-6" />,
-  flame: <Flame className="h-6 w-6" />,
-  star: <Star className="h-6 w-6" />,
-  award: <Award className="h-6 w-6" />,
-  "trending-up": <TrendingUp className="h-6 w-6" />,
-  medal: <Medal className="h-6 w-6" />,
-  crown: <Crown className="h-6 w-6" />,
-  "book-open": <BookOpen className="h-6 w-6" />,
-  "graduation-cap": <GraduationCap className="h-6 w-6" />,
-  shield: <Shield className="h-6 w-6" />,
-  target: <Target className="h-6 w-6" />,
-  zap: <Zap className="h-6 w-6" />,
-  book: <Book className="h-6 w-6" />,
-};
+interface GamificationPerfil {
+  xp: number;
+  nivel: NivelInfo;
+  streak: number;
+  maiorStreak: number;
+  ultimaAtividade: string | null;
+  conquistasDesbloqueadas: number;
+  conquistasTotal: number;
+  ultimaConquista: Conquista | null;
+}
 
-const raridadeConfig: Record<string, { color: string; bgColor: string; borderColor: string }> = {
-  comum: {
-    color: "text-gray-600",
-    bgColor: "bg-gray-100",
-    borderColor: "border-gray-300",
-  },
-  incomum: {
-    color: "text-green-600",
-    bgColor: "bg-green-100",
-    borderColor: "border-green-300",
-  },
-  raro: {
-    color: "text-blue-600",
-    bgColor: "bg-blue-100",
-    borderColor: "border-blue-300",
-  },
-  épico: {
-    color: "text-purple-600",
-    bgColor: "bg-purple-100",
-    borderColor: "border-purple-300",
-  },
-  lendário: {
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-100",
-    borderColor: "border-yellow-300",
-  },
+interface LeaderboardEntry {
+  posicao: number;
+  userId: string;
+  nome: string;
+  avatar: string | null;
+  xp: number;
+  nivel: number;
+  nomeNivel: string;
+}
+
+interface ConquistasData {
+  conquistas: Conquista[];
+  porCategoria: Record<string, Conquista[]>;
+  estatisticas: {
+    total: number;
+    desbloqueadas: number;
+    progressoGeral: number;
+    xpTotalConquistas: number;
+  };
+  proximaConquista: Conquista | null;
+}
+
+const CATEGORIA_CONFIG: Record<string, { label: string; icon: typeof Trophy; color: string }> = {
+  PROVAS: { label: "Provas", icon: Target, color: "text-blue-500" },
+  NOTAS: { label: "Notas", icon: Star, color: "text-green-500" },
+  STREAKS: { label: "Streaks", icon: Flame, color: "text-orange-500" },
+  ESPECIAIS: { label: "Especiais", icon: Zap, color: "text-purple-500" },
 };
 
 export default function ConquistasPage() {
-  const [conquistas, setConquistas] = useState<Conquista[]>([]);
-  const [estatisticas, setEstatisticas] = useState<Estatisticas | null>(null);
+  const [perfil, setPerfil] = useState<GamificationPerfil | null>(null);
+  const [conquistas, setConquistas] = useState<ConquistasData | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtroRaridade, setFiltroRaridade] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("conquistas");
+  const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<"todas" | "desbloqueadas" | "bloqueadas">("todas");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   useEffect(() => {
-    fetchConquistas();
+    fetchData();
   }, []);
 
-  const fetchConquistas = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch("/api/aluno/conquistas");
-      const data = await response.json();
-      setConquistas(data.conquistas);
-      setEstatisticas(data.estatisticas);
+      const [perfilRes, conquistasRes, leaderboardRes] = await Promise.all([
+        fetch("/api/gamification/me"),
+        fetch("/api/gamification/conquistas"),
+        fetch("/api/gamification/leaderboard?periodo=30&limit=50"),
+      ]);
+
+      if (perfilRes.ok) {
+        const perfilData = await perfilRes.json();
+        setPerfil(perfilData);
+      }
+
+      if (conquistasRes.ok) {
+        const conquistasData = await conquistasRes.json();
+        setConquistas(conquistasData);
+      }
+
+      if (leaderboardRes.ok) {
+        const leaderboardData = await leaderboardRes.json();
+        setLeaderboard(leaderboardData.leaderboard);
+        // Encontrar userId do usuário atual na entrada do leaderboard
+        if (leaderboardData.minhaEntrada) {
+          setCurrentUserId(leaderboardData.minhaEntrada.userId);
+        }
+      }
     } catch (error) {
-      console.error("Erro ao buscar conquistas:", error);
+      console.error("Erro ao buscar dados:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const conquistasFiltradas = conquistas.filter((c) => {
-    if (filtroRaridade && c.raridade !== filtroRaridade) return false;
+  const conquistasFiltradas = conquistas?.conquistas.filter((c) => {
+    if (filtroCategoria && c.categoria !== filtroCategoria) return false;
     if (filtroStatus === "desbloqueadas" && !c.desbloqueada) return false;
     if (filtroStatus === "bloqueadas" && c.desbloqueada) return false;
     return true;
-  });
-
-  const raridadesDisponiveis = Array.from(new Set(conquistas.map((c) => c.raridade)));
+  }) || [];
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Conquistas</h1>
-          <p className="text-muted-foreground">Desbloqueie conquistas ao completar desafios</p>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Trophy className="h-8 w-8 text-yellow-500" />
+            Conquistas & Gamificação
+          </h1>
+          <p className="text-muted-foreground">Acompanhe seu progresso e conquistas</p>
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-32" />
           ))}
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-40" />
-          ))}
-        </div>
+        <Skeleton className="h-64" />
       </div>
     );
   }
@@ -148,227 +165,255 @@ export default function ConquistasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Conquistas</h1>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Trophy className="h-8 w-8 text-yellow-500" />
+          Conquistas & Gamificação
+        </h1>
         <p className="text-muted-foreground">
-          Desbloqueie conquistas ao completar desafios
+          Acompanhe seu progresso, níveis e conquistas
         </p>
       </div>
 
-      {/* Estatísticas */}
-      {estatisticas && (
+      {/* Perfil de Gamificação */}
+      {perfil && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Progresso</CardTitle>
-              <Trophy className="h-4 w-4 text-yellow-500" />
+          {/* XP e Nível */}
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Seu Nível</CardTitle>
+                <NivelBadge nivel={perfil.nivel.nivel} nome={perfil.nivel.nome} />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {estatisticas.desbloqueadas}/{estatisticas.total}
+              <XPBar
+                xpAtual={perfil.nivel.xpAtual}
+                xpNecessario={perfil.nivel.xpNecessario}
+                xpProximoNivel={perfil.nivel.xpProximoNivel}
+                nivelAtual={perfil.nivel.nivel}
+                nomeNivel={perfil.nivel.nome}
+                progresso={perfil.nivel.progresso}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Streak */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Streak</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center">
+                <StreakCounter
+                  streak={perfil.streak}
+                  maiorStreak={perfil.maiorStreak}
+                  size="lg"
+                />
+                {perfil.maiorStreak > perfil.streak && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Recorde: {perfil.maiorStreak} dias
+                  </p>
+                )}
               </div>
-              <Progress value={estatisticas.progresso} className="mt-2 h-2" />
-              <p className="text-xs text-muted-foreground mt-1">
-                {estatisticas.progresso}% completo
+            </CardContent>
+          </Card>
+
+          {/* Conquistas */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Conquistas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-center">
+                {perfil.conquistasDesbloqueadas}/{perfil.conquistasTotal}
+              </div>
+              <Progress
+                value={(perfil.conquistasDesbloqueadas / perfil.conquistasTotal) * 100}
+                className="mt-2 h-2"
+              />
+              <p className="text-xs text-muted-foreground text-center mt-1">
+                {Math.round((perfil.conquistasDesbloqueadas / perfil.conquistasTotal) * 100)}% completo
               </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pontos Totais</CardTitle>
-              <Star className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{estatisticas.pontosTotais}</div>
-              <p className="text-xs text-muted-foreground">pontos acumulados</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Desbloqueadas</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {estatisticas.desbloqueadas}
-              </div>
-              <p className="text-xs text-muted-foreground">conquistas obtidas</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Bloqueadas</CardTitle>
-              <Lock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-muted-foreground">
-                {estatisticas.total - estatisticas.desbloqueadas}
-              </div>
-              <p className="text-xs text-muted-foreground">ainda por conquistar</p>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-2">
-        <div className="flex gap-2">
-          <Badge
-            variant={filtroStatus === "todas" ? "default" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setFiltroStatus("todas")}
-          >
-            Todas
-          </Badge>
-          <Badge
-            variant={filtroStatus === "desbloqueadas" ? "default" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setFiltroStatus("desbloqueadas")}
-          >
-            Desbloqueadas
-          </Badge>
-          <Badge
-            variant={filtroStatus === "bloqueadas" ? "default" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setFiltroStatus("bloqueadas")}
-          >
-            Bloqueadas
-          </Badge>
-        </div>
-
-        <div className="h-6 w-px bg-border" />
-
-        <div className="flex gap-2">
-          <Badge
-            variant={filtroRaridade === null ? "secondary" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setFiltroRaridade(null)}
-          >
-            Todas raridades
-          </Badge>
-          {raridadesDisponiveis.map((raridade) => (
-            <Badge
-              key={raridade}
-              variant={filtroRaridade === raridade ? "secondary" : "outline"}
-              className={cn(
-                "cursor-pointer",
-                filtroRaridade === raridade && raridadeConfig[raridade]?.color
-              )}
-              onClick={() => setFiltroRaridade(raridade)}
-            >
-              {raridade.charAt(0).toUpperCase() + raridade.slice(1)}
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      {/* Grid de Conquistas */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {conquistasFiltradas.map((conquista) => {
-          const config = raridadeConfig[conquista.raridade] || raridadeConfig.comum;
-
-          return (
-            <Card
-              key={conquista.id}
-              className={cn(
-                "relative overflow-hidden transition-all",
-                conquista.desbloqueada
-                  ? `border-2 ${config.borderColor}`
-                  : "opacity-60 grayscale"
-              )}
-            >
-              {conquista.desbloqueada && (
-                <div
-                  className={cn(
-                    "absolute top-0 right-0 px-2 py-1 text-xs font-medium",
-                    config.bgColor,
-                    config.color
-                  )}
-                >
-                  +{conquista.pontos} pts
-                </div>
-              )}
-
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-4">
-                  <div
-                    className={cn(
-                      "flex h-14 w-14 items-center justify-center rounded-full",
-                      conquista.desbloqueada
-                        ? config.bgColor
-                        : "bg-muted"
-                    )}
-                  >
-                    {conquista.desbloqueada ? (
-                      <span className={config.color}>
-                        {iconeMap[conquista.icone] || <Trophy className="h-6 w-6" />}
-                      </span>
-                    ) : (
-                      <Lock className="h-6 w-6 text-muted-foreground" />
-                    )}
+      {/* Próxima Conquista */}
+      {conquistas?.proximaConquista && (
+        <Card className="border-dashed border-primary/50 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
+              Próxima Conquista
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="text-3xl">{conquistas.proximaConquista.icone}</div>
+              <div className="flex-1">
+                <h3 className="font-semibold">{conquistas.proximaConquista.nome}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {conquistas.proximaConquista.descricao}
+                </p>
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                    <span>Progresso</span>
+                    <span>
+                      {conquistas.proximaConquista.progressoAtual} / {conquistas.proximaConquista.progressoTotal}
+                    </span>
                   </div>
-
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{conquista.nome}</h3>
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs", config.color)}
-                      >
-                        {conquista.raridade}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {conquista.descricao}
-                    </p>
-                    {conquista.desbloqueada && conquista.desbloqueadaEm && (
-                      <p className="text-xs text-muted-foreground">
-                        Desbloqueada em{" "}
-                        {format(new Date(conquista.desbloqueadaEm), "dd/MM/yyyy", {
-                          locale: ptBR,
-                        })}
-                      </p>
-                    )}
-                  </div>
+                  <Progress value={conquistas.proximaConquista.progresso} className="h-2" />
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {conquistasFiltradas.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Trophy className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma conquista encontrada</h3>
-            <p className="text-muted-foreground text-center">
-              Tente alterar os filtros para ver mais conquistas
-            </p>
+              </div>
+              <Badge variant="outline">+{conquistas.proximaConquista.xpBonus} XP</Badge>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Legenda de raridades */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Raridades</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            {Object.entries(raridadeConfig).map(([raridade, config]) => (
-              <div key={raridade} className="flex items-center gap-2">
-                <div className={cn("h-3 w-3 rounded-full", config.bgColor)} />
-                <span className={cn("text-sm", config.color)}>
-                  {raridade.charAt(0).toUpperCase() + raridade.slice(1)}
-                </span>
-              </div>
+      {/* Tabs: Conquistas e Leaderboard */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="conquistas" className="flex items-center gap-2">
+            <Award className="h-4 w-4" />
+            Conquistas
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="flex items-center gap-2">
+            <Trophy className="h-4 w-4" />
+            Ranking XP
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="conquistas" className="space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2">
+              <Badge
+                variant={filtroStatus === "todas" ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setFiltroStatus("todas")}
+              >
+                Todas
+              </Badge>
+              <Badge
+                variant={filtroStatus === "desbloqueadas" ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setFiltroStatus("desbloqueadas")}
+              >
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Desbloqueadas
+              </Badge>
+              <Badge
+                variant={filtroStatus === "bloqueadas" ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setFiltroStatus("bloqueadas")}
+              >
+                <Lock className="h-3 w-3 mr-1" />
+                Bloqueadas
+              </Badge>
+            </div>
+
+            <div className="h-6 w-px bg-border" />
+
+            <div className="flex gap-2">
+              <Badge
+                variant={filtroCategoria === null ? "secondary" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setFiltroCategoria(null)}
+              >
+                Todas categorias
+              </Badge>
+              {Object.entries(CATEGORIA_CONFIG).map(([key, config]) => {
+                const Icon = config.icon;
+                return (
+                  <Badge
+                    key={key}
+                    variant={filtroCategoria === key ? "secondary" : "outline"}
+                    className={cn("cursor-pointer", filtroCategoria === key && config.color)}
+                    onClick={() => setFiltroCategoria(key)}
+                  >
+                    <Icon className="h-3 w-3 mr-1" />
+                    {config.label}
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Grid de Conquistas */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {conquistasFiltradas.map((conquista) => (
+              <ConquistaCard
+                key={conquista.id}
+                codigo={conquista.codigo}
+                nome={conquista.nome}
+                descricao={conquista.descricao}
+                icone={conquista.icone}
+                categoria={conquista.categoria}
+                xpBonus={conquista.xpBonus}
+                desbloqueada={conquista.desbloqueada}
+                desbloqueadaEm={conquista.desbloqueadaEm}
+                progresso={conquista.progresso}
+                progressoAtual={conquista.progressoAtual}
+                progressoTotal={conquista.progressoTotal}
+              />
             ))}
           </div>
-        </CardContent>
-      </Card>
+
+          {conquistasFiltradas.length === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Trophy className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Nenhuma conquista encontrada</h3>
+                <p className="text-muted-foreground text-center">
+                  Tente alterar os filtros para ver mais conquistas
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Legenda de Categorias */}
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm">Categorias</CardTitle>
+            </CardHeader>
+            <CardContent className="py-2">
+              <div className="flex flex-wrap gap-4">
+                {Object.entries(CATEGORIA_CONFIG).map(([key, config]) => {
+                  const Icon = config.icon;
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      <Icon className={cn("h-4 w-4", config.color)} />
+                      <span className="text-sm">{config.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="leaderboard" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-yellow-500" />
+                Ranking por XP
+              </CardTitle>
+              <CardDescription>
+                Os jogadores com mais XP nos últimos 30 dias
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LeaderboardTable
+                entries={leaderboard}
+                currentUserId={currentUserId}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

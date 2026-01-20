@@ -302,16 +302,34 @@ export function DragDropDisplay({
     useSensor(KeyboardSensor)
   );
 
-  // Inicializar posições se vazio
+  // Inicializar posições apenas se realmente não existem E não há resposta salva
+  // Usar ref para garantir que só inicializa uma vez
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
+    // Só inicializa se ainda não inicializou E se não há posições válidas
+    if (hasInitialized.current) return;
+
+    const hasValidPosicoes = value.posicoes &&
+      Object.keys(value.posicoes).length > 0 &&
+      Object.values(value.posicoes).some(arr => arr.length > 0);
+
+    // Se já tem posições com itens, não sobrescreve
+    if (hasValidPosicoes) {
+      hasInitialized.current = true;
+      return;
+    }
+
+    // Se não tem posições mas tem zonas configuradas, inicializa vazio
     if (!value.posicoes || Object.keys(value.posicoes).length === 0) {
       const initialPosicoes: Record<string, string[]> = {};
       config.zonas.forEach((zona) => {
         initialPosicoes[zona.id] = [];
       });
+      hasInitialized.current = true;
       onChange({ posicoes: initialPosicoes });
     }
-  }, []);
+  }, [config.zonas, value.posicoes, onChange]);
 
   // IDs de itens usados em zonas
   const usedItemIds = Object.entries(value.posicoes || {})

@@ -14,24 +14,25 @@ enum Role {
 }
 
 model User {
-  id            String          @id @default(cuid())
+  id            String            @id @default(cuid())
   nome          String
-  email         String          @unique
+  email         String            @unique
   emailVerified DateTime?
   senha         String?
   avatar        String?
-  role          Role            @default(ALUNO)
+  role          Role              @default(ALUNO)
   accounts      Account[]
   sessions      Session[]
   simulados     Simulado[]
-  turmasDocente Turma[]         @relation("DocenteTurmas")
-  turmasAluno   TurmaAluno[]    @relation("AlunoTurmas")
-  tentativas    Tentativa[]     @relation("AlunoTentativas")
+  turmasDocente Turma[]           @relation("DocenteTurmas")
+  turmasAluno   TurmaAluno[]      @relation("AlunoTurmas")
+  tentativas    Tentativa[]       @relation("AlunoTentativas")
   notificacoes  Notificacao[]
   conquistas    UserConquista[]
-  certificados  Certificado[]   @relation("AlunoCertificados")
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  gamification  UserGamification?
+  certificados  Certificado[]     @relation("AlunoCertificados")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 }
 
 model Account {
@@ -313,45 +314,50 @@ model Notificacao {
   @@index([userId, lida])
 }
 
-// CONQUISTAS / GAMIFICAÇÃO
+// GAMIFICAÇÃO
 
-enum TipoConquista {
-  PRIMEIRA_PROVA
-  PRIMEIRA_APROVACAO
-  STREAK_3
-  STREAK_7
-  STREAK_30
-  NOTA_PERFEITA
-  NOTA_90
-  APROVACOES_5
-  APROVACOES_10
-  APROVACOES_25
-  PROVAS_10
-  PROVAS_25
-  PROVAS_50
-  CATEGORIA_COMPLETA
-  VELOCISTA
-  ESTUDIOSO
+model UserGamification {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp              Int       @default(0)
+  nivel           Int       @default(1)
+  streak          Int       @default(0)
+  maiorStreak     Int       @default(0)
+  ultimaAtividade DateTime?
+  aprovacoesSeguidas Int    @default(0) // Para conquista de aprovações consecutivas
+  acertosSeguidos    Int    @default(0) // Para conquista Sniper
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+enum CategoriaConquista {
+  PROVAS
+  NOTAS
+  STREAKS
+  ESPECIAIS
 }
 
 model Conquista {
-  id          String          @id @default(cuid())
-  codigo      TipoConquista   @unique
+  id          String              @id @default(cuid())
+  codigo      String              @unique
   nome        String
   descricao   String
-  icone       String
-  pontos      Int             @default(10)
-  raridade    String          @default("comum")
+  icone       String              // emoji ou nome do ícone
+  categoria   CategoriaConquista
+  condicao    Json                // critérios para desbloquear
+  xpBonus     Int                 @default(0)
+  ordem       Int                 @default(0)
   usuarios    UserConquista[]
 }
 
 model UserConquista {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conquistaId String
-  conquista   Conquista @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
-  desbloqueadaEm DateTime @default(now())
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conquistaId    String
+  conquista      Conquista @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
+  desbloqueadaEm DateTime  @default(now())
 
   @@unique([userId, conquistaId])
   @@index([userId])

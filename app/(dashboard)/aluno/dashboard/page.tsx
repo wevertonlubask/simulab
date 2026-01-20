@@ -17,7 +17,7 @@ import {
   ProvasPendentesCard,
   UltimasProvasCard,
   QuestoesRevisarCard,
-  StreakWidget,
+  GamificationWidget,
 } from "@/components/dashboard";
 
 interface ResumoData {
@@ -293,16 +293,10 @@ export default function AlunoDashboardPage() {
         <CategoriasChart data={categorias} loading={loading.categorias} />
       </div>
 
-      {/* Radar and Streak Row */}
+      {/* Radar and Gamification Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         <RadarDesempenho data={tags} loading={loading.tags} />
-        <StreakWidget
-          streak={resumo?.streak || 0}
-          xp={resumo ? resumo.totalProvas * 10 : 0}
-          xpNextLevel={100}
-          level={resumo ? Math.floor(resumo.totalProvas / 10) + 1 : 1}
-          loading={loading.resumo}
-        />
+        <GamificationWidget />
       </div>
 
       {/* Lists Row */}

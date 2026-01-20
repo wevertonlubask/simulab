@@ -218,7 +218,7 @@ export function gerarCertificadoPDF(data: CertificadoData): void {
     { align: "center" }
   );
   doc.text(
-    "Valide este certificado em: simulab.com.br/certificados/validar",
+    `Valide este certificado em: simulab.app.br/verificar/${data.codigo}`,
     pageWidth / 2,
     pageHeight - 15,
     { align: "center" }
@@ -403,7 +403,7 @@ export function gerarCertificadoBlob(data: CertificadoData): Blob {
     { align: "center" }
   );
   doc.text(
-    "Valide este certificado em: simulab.com.br/certificados/validar",
+    `Valide este certificado em: simulab.app.br/verificar/${data.codigo}`,
     pageWidth / 2,
     pageHeight - 15,
     { align: "center" }

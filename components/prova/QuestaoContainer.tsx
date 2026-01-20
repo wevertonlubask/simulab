@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -68,6 +68,11 @@ export function QuestaoContainer({
   const [marcadaRevisao, setMarcadaRevisao] = useState(
     questao.resposta?.marcadaRevisao || false
   );
+
+  // Sincronizar estado local com a questão atual quando ela muda
+  useEffect(() => {
+    setMarcadaRevisao(questao.resposta?.marcadaRevisao || false);
+  }, [questao.provaQuestaoId, questao.resposta?.marcadaRevisao]);
 
   const handleRespostaChange = useCallback(
     (resposta: unknown) => {

@@ -15,6 +15,7 @@ interface StatCardProps {
   loading?: boolean;
   className?: string;
   iconClassName?: string;
+  delay?: number;
 }
 
 export function StatCard({
@@ -27,6 +28,7 @@ export function StatCard({
   loading = false,
   className,
   iconClassName,
+  delay = 0,
 }: StatCardProps) {
   if (loading) {
     return (
@@ -44,7 +46,13 @@ export function StatCard({
   }
 
   return (
-    <Card className={className}>
+    <Card
+      className={cn(
+        "transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 animate-fade-in-up",
+        className
+      )}
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">
@@ -52,7 +60,7 @@ export function StatCard({
           </span>
           <div
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-full bg-primary/10",
+              "flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 transition-transform hover:scale-110",
               iconClassName
             )}
           >
@@ -60,14 +68,14 @@ export function StatCard({
           </div>
         </div>
         <div className="mt-3">
-          <span className="text-3xl font-bold">{value}</span>
+          <span className="text-3xl font-bold tabular-nums">{value}</span>
         </div>
         {(description || trend !== undefined) && (
           <div className="mt-2 flex items-center gap-2">
             {trend !== undefined && (
               <span
                 className={cn(
-                  "flex items-center text-sm font-medium",
+                  "flex items-center text-sm font-medium transition-colors",
                   trend > 0
                     ? "text-green-500"
                     : trend < 0

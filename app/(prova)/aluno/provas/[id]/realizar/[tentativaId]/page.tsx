@@ -22,11 +22,64 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Loader2, Menu, Send, LogOut, AlertTriangle } from "lucide-react";
+import { Loader2, Menu, Send, LogOut, AlertTriangle, Keyboard } from "lucide-react";
 import { ProvaTimer } from "@/components/prova/ProvaTimer";
 import { QuestaoContainer } from "@/components/prova/QuestaoContainer";
 import { QuestaoNavegacao } from "@/components/prova/QuestaoNavegacao";
+import { KeyboardShortcutsModal } from "@/components/prova/KeyboardShortcutsModal";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import type { TipoQuestao } from "@prisma/client";
+
+// Função auxiliar para verificar se uma resposta está realmente preenchida
+function isRespostaPreenchida(resposta: unknown, tipo: TipoQuestao): boolean {
+  if (resposta === undefined || resposta === null) return false;
+
+  switch (tipo) {
+    case "MULTIPLA_ESCOLHA_UNICA": {
+      const r = resposta as { alternativaId?: string };
+      return !!r.alternativaId;
+    }
+    case "MULTIPLA_ESCOLHA_MULTIPLA": {
+      const r = resposta as { alternativasIds?: string[] };
+      return Array.isArray(r.alternativasIds) && r.alternativasIds.length > 0;
+    }
+    case "DRAG_DROP": {
+      const r = resposta as { posicoes?: Record<string, string[]> };
+      if (!r.posicoes) return false;
+      // Verificar se alguma zona tem itens
+      return Object.values(r.posicoes).some(
+        (items) => Array.isArray(items) && items.length > 0
+      );
+    }
+    case "ASSOCIACAO": {
+      const r = resposta as { conexoes?: Array<{ origem: string; destino: string }> };
+      return Array.isArray(r.conexoes) && r.conexoes.length > 0;
+    }
+    case "ORDENACAO": {
+      const r = resposta as { ordem?: string[] };
+      return Array.isArray(r.ordem) && r.ordem.length > 0;
+    }
+    case "LACUNA": {
+      const r = resposta as { respostas?: Record<string, string> };
+      if (!r.respostas) return false;
+      // Verificar se alguma lacuna foi preenchida
+      return Object.values(r.respostas).some(
+        (texto) => typeof texto === "string" && texto.trim() !== ""
+      );
+    }
+    case "HOTSPOT": {
+      const r = resposta as { regiaoSelecionada?: string };
+      return !!r.regiaoSelecionada;
+    }
+    case "COMANDO": {
+      const r = resposta as { comando?: string };
+      return typeof r.comando === "string" && r.comando.trim() !== "";
+    }
+    default:
+      // Para tipos desconhecidos, considerar preenchida se existir
+      return true;
+  }
+}
 
 interface PageProps {
   params: { id: string; tentativaId: string };
@@ -90,6 +143,7 @@ export default function RealizarProvaPage({ params }: PageProps) {
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [respostas, setRespostas] = useState<
     Record<string, { resposta: unknown; marcadaRevisao: boolean }>
   >({});
@@ -214,6 +268,62 @@ export default function RealizarProvaPage({ params }: PageProps) {
     router.push(`/aluno/provas/${provaId}`);
   };
 
+  // Handler para selecionar alternativa via teclado
+  const handleSelectAlternative = useCallback(
+    (index: number) => {
+      if (!data) return;
+      const questao = data.questoes[questaoAtual];
+      if (
+        questao.tipo !== "MULTIPLA_ESCOLHA_UNICA" &&
+        questao.tipo !== "MULTIPLA_ESCOLHA_MULTIPLA"
+      ) {
+        return;
+      }
+      if (index >= questao.alternativas.length) return;
+
+      const alternativaId = questao.alternativas[index].id;
+      const respostaAtual = respostas[questao.provaQuestaoId];
+
+      if (questao.tipo === "MULTIPLA_ESCOLHA_UNICA") {
+        salvarResposta(questao.provaQuestaoId, questao.questaoId, { alternativaId });
+      } else {
+        // Múltipla escolha múltipla: toggle
+        const alternativasIds = ((respostaAtual?.resposta as { alternativasIds?: string[] })?.alternativasIds || []);
+        const novasAlternativas = alternativasIds.includes(alternativaId)
+          ? alternativasIds.filter((id) => id !== alternativaId)
+          : [...alternativasIds, alternativaId];
+        salvarResposta(questao.provaQuestaoId, questao.questaoId, { alternativasIds: novasAlternativas });
+      }
+    },
+    [data, questaoAtual, respostas, salvarResposta]
+  );
+
+  // Handler para marcar/desmarcar revisão via teclado
+  const handleToggleReview = useCallback(() => {
+    if (!data) return;
+    const questao = data.questoes[questaoAtual];
+    const respostaAtual = respostas[questao.provaQuestaoId];
+    const novaMarcacao = !(respostaAtual?.marcadaRevisao ?? false);
+    salvarResposta(
+      questao.provaQuestaoId,
+      questao.questaoId,
+      respostaAtual?.resposta ?? null,
+      novaMarcacao
+    );
+  }, [data, questaoAtual, respostas, salvarResposta]);
+
+  // Configurar atalhos de teclado
+  useKeyboardShortcuts({
+    onNavigateLeft: () => questaoAtual > 0 && setQuestaoAtual(questaoAtual - 1),
+    onNavigateRight: () =>
+      data && questaoAtual < data.totalQuestoes - 1 && setQuestaoAtual(questaoAtual + 1),
+    onSelectAlternative: handleSelectAlternative,
+    onToggleReview: handleToggleReview,
+    onSubmit: () => setShowSubmitDialog(true),
+    onShowHelp: () => setShowShortcutsModal(true),
+    enabled: !loading && !showSubmitDialog && !showExitDialog && !showShortcutsModal,
+  });
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -230,7 +340,7 @@ export default function RealizarProvaPage({ params }: PageProps) {
   const questoesComStatus = data.questoes.map((q) => ({
     provaQuestaoId: q.provaQuestaoId,
     ordem: q.ordem,
-    respondida: respostas[q.provaQuestaoId]?.resposta !== undefined,
+    respondida: isRespostaPreenchida(respostas[q.provaQuestaoId]?.resposta, q.tipo),
     marcadaRevisao: respostas[q.provaQuestaoId]?.marcadaRevisao || false,
   }));
 
@@ -301,6 +411,17 @@ export default function RealizarProvaPage({ params }: PageProps) {
                 </span>
               )}
             </div>
+
+            {/* Botão de atalhos */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowShortcutsModal(true)}
+              className="hidden sm:flex h-8 w-8"
+              title="Atalhos de teclado (?)"
+            >
+              <Keyboard className="h-4 w-4" />
+            </Button>
 
             {/* Ações */}
             <Button
@@ -428,6 +549,12 @@ export default function RealizarProvaPage({ params }: PageProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Atalhos */}
+      <KeyboardShortcutsModal
+        open={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
     </div>
   );
 }

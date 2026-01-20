@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
-import { getConquistasUsuario, getPontosUsuario, verificarConquistas } from "@/lib/conquistas";
+import { ensureConquistasExist, getConquistasUsuario, getPontosUsuario, verificarConquistas } from "@/lib/conquistas";
 
 export async function GET() {
   try {
     const user = await requireRole(["ALUNO"]);
+
+    // Garantir que as conquistas existam no banco
+    await ensureConquistasExist();
 
     // Verificar conquistas pendentes
     await verificarConquistas(user.id);

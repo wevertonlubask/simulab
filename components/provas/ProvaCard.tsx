@@ -20,6 +20,7 @@ import {
   Trash2,
   Clock,
   Users,
+  Copy,
 } from "lucide-react";
 import type { Prova, StatusProva } from "@prisma/client";
 
@@ -36,6 +37,7 @@ interface ProvaCardProps {
   onPublish?: (id: string) => void;
   onClose?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
 export function ProvaCard({
@@ -44,6 +46,7 @@ export function ProvaCard({
   onPublish,
   onClose,
   onDelete,
+  onDuplicate,
 }: ProvaCardProps) {
   return (
     <Card>
@@ -81,6 +84,10 @@ export function ProvaCard({
                   <FileQuestion className="mr-2 h-4 w-4" />
                   Ver Questões
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDuplicate?.(prova.id)}>
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {prova.status === "RASCUNHO" && (

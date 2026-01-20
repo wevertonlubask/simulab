@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import type { TipoQuestao, Prisma } from "@prisma/client";
 import { notifyResultadoDisponivel } from "@/lib/notifications";
-import { verificarConquistas } from "@/lib/conquistas";
+import { processarSubmissaoProva } from "@/lib/gamification";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -136,10 +136,60 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ).catch((err) => console.error("Erro ao notificar resultado:", err));
     }
 
-    // Verificar conquistas após submissão
-    verificarConquistas(session.user.id).catch((err) =>
-      console.error("Erro ao verificar conquistas:", err)
-    );
+    // Verificar se é a primeira prova do simulado para este aluno
+    const tentativasDoSimulado = await db.tentativa.count({
+      where: {
+        alunoId: session.user.id,
+        prova: {
+          simuladoId: tentativa.prova.simuladoId,
+        },
+        status: "SUBMETIDA",
+      },
+    });
+    const primeiraProvaSimulado = tentativasDoSimulado === 1;
+
+    // Buscar categoria do simulado
+    const simulado = await db.simulado.findUnique({
+      where: { id: tentativa.prova.simuladoId },
+      select: { categoria: true },
+    });
+
+    // Calcular acertos consecutivos (para conquista Sniper)
+    const respostasOrdenadas = tentativa.respostas
+      .filter((r) => r.correta !== null)
+      .sort((a, b) => {
+        const ordemA = tentativa.prova.questoes.find(q => q.id === a.provaQuestaoId)?.ordem ?? 0;
+        const ordemB = tentativa.prova.questoes.find(q => q.id === b.provaQuestaoId)?.ordem ?? 0;
+        return ordemA - ordemB;
+      });
+
+    let acertosConsecutivos = 0;
+    let maxAcertosConsecutivos = 0;
+    for (const resp of respostasOrdenadas) {
+      if (resp.correta) {
+        acertosConsecutivos++;
+        maxAcertosConsecutivos = Math.max(maxAcertosConsecutivos, acertosConsecutivos);
+      } else {
+        acertosConsecutivos = 0;
+      }
+    }
+
+    // Processar gamificação (XP, níveis, conquistas)
+    const aprovado = nota >= tentativa.prova.notaMinima;
+    let gamificacaoResult = null;
+    try {
+      gamificacaoResult = await processarSubmissaoProva(session.user.id, {
+        nota,
+        aprovado,
+        tempoGasto,
+        tempoLimite: tentativa.prova.tempoLimite ?? undefined,
+        acertosConsecutivos: maxAcertosConsecutivos,
+        categoria: simulado?.categoria || "Geral",
+        primeiraProvaSimulado,
+      });
+    } catch (err) {
+      console.error("Erro ao processar gamificação:", err);
+    }
 
     return NextResponse.json({
       success: true,
@@ -148,10 +198,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         totalAcertos: tentativaAtualizada.totalAcertos,
         totalQuestoes: tentativaAtualizada.totalQuestoes,
         tempoGasto: tentativaAtualizada.tempoGasto,
-        aprovado: nota >= tentativa.prova.notaMinima,
+        aprovado,
         notaMinima: tentativa.prova.notaMinima,
         mostrarResultado: tentativa.prova.mostrarResultado,
       },
+      gamificacao: gamificacaoResult,
     });
   } catch (error) {
     console.error("Erro ao submeter prova:", error);
@@ -220,16 +271,50 @@ function avaliarResposta(
     }
 
     case "ORDENACAO": {
-      // resposta = { ordem: ["id1", "id2", "id3"] }
+      // Novo formato: resposta = { ordem: ["id1", "id2", "id3"] }
+      // Config = { itens: [{ id, texto, ordemCorreta }], pontuacaoParcial }
       const respostaObj = resposta as { ordem?: string[] };
+      const configObj = configuracao as {
+        itens?: { id: string; ordemCorreta: number }[];
+        pontuacaoParcial?: boolean;
+      };
+
+      const ordemResposta = respostaObj.ordem || [];
+
+      // Novo formato (config com itens e ordemCorreta)
+      if (configObj?.itens && configObj.itens.length > 0) {
+        // Obter ordem correta baseada no campo ordemCorreta
+        const ordemCorreta = [...configObj.itens]
+          .sort((a, b) => a.ordemCorreta - b.ordemCorreta)
+          .map((item) => item.id);
+
+        if (ordemResposta.length !== ordemCorreta.length) {
+          return { correta: false, pontuacao: 0 };
+        }
+
+        // Contar quantos estão na posição correta
+        let acertos = 0;
+        for (let i = 0; i < ordemCorreta.length; i++) {
+          if (ordemResposta[i] === ordemCorreta[i]) {
+            acertos++;
+          }
+        }
+
+        const pontuacao = acertos / ordemCorreta.length;
+        const todasCorretas = acertos === ordemCorreta.length;
+        return { correta: todasCorretas, pontuacao: todasCorretas ? 1 : pontuacao };
+      }
+
+      // Formato antigo (usando alternativas)
       const ordemCorreta = alternativas
         .sort((a, b) => {
-          // Assumindo que a ordem está no campo `ordem` ou similar
-          return 0; // Precisaria de mais dados
+          // Usar o campo ordem das alternativas
+          const ordemA = (a as { ordem?: number }).ordem ?? 0;
+          const ordemB = (b as { ordem?: number }).ordem ?? 0;
+          return ordemA - ordemB;
         })
         .map((a) => a.id);
 
-      const ordemResposta = respostaObj.ordem || [];
       const correta =
         JSON.stringify(ordemCorreta) === JSON.stringify(ordemResposta);
 
@@ -237,49 +322,199 @@ function avaliarResposta(
     }
 
     case "ASSOCIACAO": {
-      // resposta = { associacoes: { "itemA": "itemB", ... } }
-      const respostaObj = resposta as { associacoes?: Record<string, string> };
-      const configObj = configuracao as { pares?: { esquerda: string; direita: string }[] };
+      // Novo formato: resposta = { conexoes: [{ de: "idA", para: "idB" }] }
+      // Config = { colunaA, colunaB, conexoesCorretas: [{ de, para }] }
+      const respostaObj = resposta as {
+        conexoes?: { de: string; para: string }[];
+        associacoes?: Record<string, string>; // Formato antigo (fallback)
+      };
+      const configObj = configuracao as {
+        conexoesCorretas?: { de: string; para: string }[];
+        pares?: { esquerda: string; direita: string }[]; // Formato antigo (fallback)
+        pontuacaoParcial?: boolean;
+      };
 
-      if (!configObj?.pares || !respostaObj.associacoes) {
-        return { correta: false, pontuacao: 0 };
+      // Novo formato (conexoes)
+      if (configObj?.conexoesCorretas && respostaObj?.conexoes) {
+        const conexoesCorretas = configObj.conexoesCorretas;
+        const conexoesUsuario = respostaObj.conexoes;
+
+        let acertos = 0;
+        conexoesCorretas.forEach((correta) => {
+          const encontrada = conexoesUsuario.some(
+            (c) => c.de === correta.de && c.para === correta.para
+          );
+          if (encontrada) {
+            acertos++;
+          }
+        });
+
+        // Penalizar conexões erradas
+        const erros = conexoesUsuario.filter(
+          (c) => !conexoesCorretas.some((correta) => correta.de === c.de && correta.para === c.para)
+        ).length;
+
+        const pontuacaoBruta = acertos / conexoesCorretas.length;
+        const penalidade = erros / conexoesCorretas.length;
+        const pontuacao = Math.max(0, pontuacaoBruta - (configObj.pontuacaoParcial === false ? 0 : penalidade * 0.5));
+
+        return { correta: acertos === conexoesCorretas.length && erros === 0, pontuacao: acertos === conexoesCorretas.length && erros === 0 ? 1 : pontuacao };
       }
 
-      let acertos = 0;
-      configObj.pares.forEach((par) => {
-        if (respostaObj.associacoes?.[par.esquerda] === par.direita) {
-          acertos++;
-        }
-      });
+      // Formato antigo (fallback)
+      if (configObj?.pares && respostaObj?.associacoes) {
+        let acertos = 0;
+        configObj.pares.forEach((par) => {
+          if (respostaObj.associacoes?.[par.esquerda] === par.direita) {
+            acertos++;
+          }
+        });
 
-      const pontuacao = acertos / configObj.pares.length;
-      return { correta: pontuacao === 1, pontuacao };
+        const pontuacao = acertos / configObj.pares.length;
+        return { correta: pontuacao === 1, pontuacao };
+      }
+
+      return { correta: false, pontuacao: 0 };
     }
 
     case "LACUNA": {
-      // resposta = { lacunas: { "0": "texto", "1": "texto2" } }
-      const respostaObj = resposta as { lacunas?: Record<string, string> };
-      const configObj = configuracao as { lacunas?: { indice: number; resposta: string }[] };
+      // Novo formato: resposta = { respostas: { "lacunaId": "texto" } }
+      // Config = { texto, lacunas: [{ id, respostasAceitas: string[] }], caseSensitive }
+      const respostaObj = resposta as {
+        respostas?: Record<string, string>;
+        lacunas?: Record<string, string>; // Formato antigo (fallback)
+      };
+      const configObj = configuracao as {
+        texto?: string;
+        lacunas?: { id: string; respostasAceitas: string[] }[] | { indice: number; resposta: string }[];
+        caseSensitive?: boolean;
+        pontuacaoParcial?: boolean;
+      };
 
-      if (!configObj?.lacunas || !respostaObj.lacunas) {
+      if (!configObj?.lacunas || configObj.lacunas.length === 0) {
         return { correta: false, pontuacao: 0 };
       }
 
+      // Novo formato (respostas com IDs e respostasAceitas)
+      const primeiroItem = configObj.lacunas[0];
+      if (primeiroItem && "id" in primeiroItem && "respostasAceitas" in primeiroItem) {
+        const lacunasConfig = configObj.lacunas as { id: string; respostasAceitas: string[] }[];
+        const respostasUsuario = respostaObj.respostas || {};
+
+        // Filtrar apenas lacunas que existem no texto (algumas podem ter sido removidas)
+        const lacunasNoTexto = lacunasConfig.filter((_, index) => {
+          const placeholder = `[LACUNA_${index + 1}]`;
+          return configObj.texto?.includes(placeholder);
+        });
+
+        // Se não há lacunas no texto, usar todas as configuradas
+        const lacunasParaAvaliar = lacunasNoTexto.length > 0 ? lacunasNoTexto : lacunasConfig;
+
+        let acertos = 0;
+        lacunasParaAvaliar.forEach((lacuna) => {
+          const respostaAluno = respostasUsuario[lacuna.id]?.trim() || "";
+          const respostaComparar = configObj.caseSensitive
+            ? respostaAluno
+            : respostaAluno.toLowerCase();
+
+          const encontrada = lacuna.respostasAceitas.some((aceita) => {
+            const aceitaComparar = configObj.caseSensitive
+              ? aceita.trim()
+              : aceita.trim().toLowerCase();
+            return respostaComparar === aceitaComparar;
+          });
+
+          if (encontrada) {
+            acertos++;
+          }
+        });
+
+        const pontuacao = lacunasParaAvaliar.length > 0 ? acertos / lacunasParaAvaliar.length : 0;
+        return { correta: pontuacao === 1, pontuacao };
+      }
+
+      // Formato antigo (fallback)
+      const lacunasAntigo = configObj.lacunas as { indice: number; resposta: string }[];
+      const lacunasUsuario = respostaObj.lacunas || {};
+
       let acertos = 0;
-      configObj.lacunas.forEach((lacuna) => {
-        const respostaLacuna = respostaObj.lacunas?.[lacuna.indice.toString()]?.trim().toLowerCase();
+      lacunasAntigo.forEach((lacuna) => {
+        const respostaLacuna = lacunasUsuario[lacuna.indice.toString()]?.trim().toLowerCase();
         if (respostaLacuna === lacuna.resposta.trim().toLowerCase()) {
           acertos++;
         }
       });
 
-      const pontuacao = acertos / configObj.lacunas.length;
+      const pontuacao = acertos / lacunasAntigo.length;
       return { correta: pontuacao === 1, pontuacao };
     }
 
     case "DRAG_DROP": {
-      // Implementação similar a associação
-      return { correta: false, pontuacao: 0 };
+      // Resposta = { posicoes: { zonaId: [itemId1, itemId2] } }
+      // Config = { itens, zonas: [{ id, itensCorretos: [itemIds] }], pontuacaoParcial }
+      const respostaObj = resposta as { posicoes?: Record<string, string[]> };
+      const configObj = configuracao as {
+        itens?: { id: string; texto: string }[];
+        zonas?: { id: string; itensCorretos: string[] }[];
+        pontuacaoParcial?: boolean;
+      };
+
+      if (!configObj?.zonas || !respostaObj?.posicoes) {
+        return { correta: false, pontuacao: 0 };
+      }
+
+      // Criar um mapa de zona por ID para lookup rápido
+      const zonasMap = new Map(configObj.zonas.map(z => [z.id, z]));
+
+      // Todos os itens que precisam ser posicionados corretamente
+      const todosItensCorretos = configObj.zonas.flatMap(z => z.itensCorretos || []);
+      const totalItensCorretos = todosItensCorretos.length;
+
+      if (totalItensCorretos === 0) {
+        return { correta: true, pontuacao: 1 };
+      }
+
+      let totalCorretos = 0;
+      let erros = 0;
+
+      // Verificar cada zona na resposta do usuário
+      Object.entries(respostaObj.posicoes).forEach(([zonaId, itensNaZona]) => {
+        const zona = zonasMap.get(zonaId);
+
+        if (!zona) {
+          // Zona na resposta não existe na config - todos itens são erros
+          erros += itensNaZona.length;
+          return;
+        }
+
+        const itensCorretos = zona.itensCorretos || [];
+
+        // Verificar cada item posicionado nesta zona
+        itensNaZona.forEach((itemId) => {
+          if (itensCorretos.includes(itemId)) {
+            totalCorretos++;
+          } else {
+            erros++;
+          }
+        });
+      });
+
+      // Verificar itens não posicionados (que deveriam estar em alguma zona)
+      const todosItensUsuario = Object.values(respostaObj.posicoes).flat();
+      const itensNaoPosicionados = todosItensCorretos.filter(
+        itemId => !todosItensUsuario.includes(itemId)
+      );
+      // Itens não posicionados contam como erros implícitos (não acertou)
+      // Não precisamos adicionar a erros, pois já não estão em totalCorretos
+
+      const pontuacaoBruta = totalCorretos / totalItensCorretos;
+      const penalidade = erros > 0 ? (erros / totalItensCorretos) * 0.5 : 0;
+      const pontuacaoFinal = configObj.pontuacaoParcial === false
+        ? (totalCorretos === totalItensCorretos && erros === 0 ? 1 : 0)
+        : Math.max(0, pontuacaoBruta - penalidade);
+
+      const todasCorretas = totalCorretos === totalItensCorretos && erros === 0;
+      return { correta: todasCorretas, pontuacao: todasCorretas ? 1 : pontuacaoFinal };
     }
 
     case "HOTSPOT": {

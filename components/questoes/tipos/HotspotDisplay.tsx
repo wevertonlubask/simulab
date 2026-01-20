@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, MousePointer2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,17 +26,9 @@ export function HotspotDisplay({
   disabled = false,
   showResult = false,
 }: HotspotDisplayProps) {
-  const [cliques, setCliques] = useState<HotspotResposta["cliques"]>(
-    value?.cliques || []
-  );
+  // Usar diretamente o value para evitar dessincronização
+  const cliques = value?.cliques || [];
   const imageContainerRef = useRef<HTMLDivElement>(null);
-
-  // Inicializar com resposta existente
-  useEffect(() => {
-    if (value?.cliques) {
-      setCliques(value.cliques);
-    }
-  }, []);
 
   // Converter coordenadas do mouse para porcentagem
   const getRelativeCoords = useCallback(
@@ -99,7 +91,6 @@ export function HotspotDisplay({
         novosCliques = [{ x, y, areaId }];
       }
 
-      setCliques(novosCliques);
       onChange({ cliques: novosCliques });
     },
     [
@@ -115,7 +106,6 @@ export function HotspotDisplay({
 
   // Limpar cliques
   const handleReset = useCallback(() => {
-    setCliques([]);
     onChange({ cliques: [] });
   }, [onChange]);
 

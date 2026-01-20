@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   DndContext,
   closestCenter,
@@ -197,22 +197,32 @@ export function OrdenacaoDisplay({
     return result;
   };
 
+  // Ref para controlar se já inicializamos
+  const hasInitialized = useRef(false);
+
   // Inicializar com ordem embaralhada ou ordem existente
   useEffect(() => {
+    // Se já tem uma resposta válida (com itens posicionados), usar ela
     if (value?.ordem && value.ordem.length > 0) {
       setItems(value.ordem);
-    } else {
-      // Obter ordem correta
-      const correctOrder = [...config.itens]
-        .sort((a, b) => a.ordemCorreta - b.ordemCorreta)
-        .map((item) => item.id);
-
-      // Embaralhar maximizando distância da ordem correta
-      const shuffled = shuffleMaxDistance(correctOrder);
-      setItems(shuffled);
-      onChange({ ordem: shuffled });
+      hasInitialized.current = true;
+      return;
     }
-  }, []);
+
+    // Só embaralha se ainda não inicializamos
+    if (hasInitialized.current) return;
+
+    // Obter ordem correta
+    const correctOrder = [...config.itens]
+      .sort((a, b) => a.ordemCorreta - b.ordemCorreta)
+      .map((item) => item.id);
+
+    // Embaralhar maximizando distância da ordem correta
+    const shuffled = shuffleMaxDistance(correctOrder);
+    setItems(shuffled);
+    hasInitialized.current = true;
+    onChange({ ordem: shuffled });
+  }, [value?.ordem, config.itens]);
 
   // Ordem correta
   const ordemCorreta = [...config.itens]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -32,21 +32,15 @@ export function LacunaDisplay({
   disabled = false,
   showResult = false,
 }: LacunaDisplayProps) {
-  const [respostas, setRespostas] = useState<Record<string, string>>({});
+  // Usar diretamente o value.respostas em vez de estado local duplicado
+  // para evitar dessincronização
+  const respostas = value?.respostas || {};
   const [showHints, setShowHints] = useState<Record<string, boolean>>({});
-
-  // Inicializar com respostas existentes
-  useEffect(() => {
-    if (value?.respostas) {
-      setRespostas(value.respostas);
-    }
-  }, []);
 
   // Atualizar resposta
   const updateResposta = useCallback(
     (lacunaId: string, texto: string) => {
       const novasRespostas = { ...respostas, [lacunaId]: texto };
-      setRespostas(novasRespostas);
       onChange({ respostas: novasRespostas });
     },
     [respostas, onChange]
@@ -107,7 +101,7 @@ export function LacunaDisplay({
         const respostaAtual = respostas[lacuna.id] || "";
 
         elementos.push(
-          <span key={`lacuna-${lacuna.id}`} className="inline-flex items-center gap-1 mx-1 align-middle">
+          <span key={`lacuna-${lacuna.id}`} className="inline-flex items-center gap-1 mx-2 my-1 align-middle">
             <Select
               value={respostaAtual}
               onValueChange={(value) => updateResposta(lacuna.id, value)}
@@ -115,7 +109,7 @@ export function LacunaDisplay({
             >
               <SelectTrigger
                 className={cn(
-                  "w-[180px] h-8 inline-flex",
+                  "w-[160px] h-7 text-sm inline-flex px-2",
                   showResult && isCorrect && "border-green-500 bg-green-500/10",
                   showResult && isCorrect === false && "border-red-500 bg-red-500/10"
                 )}
@@ -124,7 +118,7 @@ export function LacunaDisplay({
               </SelectTrigger>
               <SelectContent>
                 {shuffledOpcoes.map((opcao) => (
-                  <SelectItem key={opcao} value={opcao}>
+                  <SelectItem key={opcao} value={opcao} className="text-sm">
                     {opcao}
                   </SelectItem>
                 ))}
@@ -169,7 +163,7 @@ export function LacunaDisplay({
   return (
     <div className="space-y-4">
       {/* Texto com lacunas */}
-      <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed text-base">
+      <div className="prose prose-sm max-w-none dark:prose-invert leading-loose text-base [&>span]:leading-loose">
         {renderTextoComSelects()}
       </div>
 

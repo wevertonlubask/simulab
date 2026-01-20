@@ -82,6 +82,7 @@ const defaultLacunaConfig: LacunaConfig = {
   lacunas: [],
   caseSensitive: false,
   pontuacaoParcial: true,
+  opcoes: [],
 };
 
 const defaultComandoConfig: ComandoConfig = {

@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       nome: string;
       descricao: string | null;
       tempoLimite: number | null;
-      tentativasMax: number;
+      tentativasMax: number | null;
       totalQuestoes: number;
       simulado: {
         nome: string;
@@ -91,10 +91,9 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        const tentativasRestantes = Math.max(
-          0,
-          turmaProva.prova.tentativasMax - tentativasRealizadas
-        );
+        const tentativasRestantes = turmaProva.prova.tentativasMax === null
+          ? Infinity
+          : Math.max(0, turmaProva.prova.tentativasMax - tentativasRealizadas);
 
         provasDisponiveis.push({
           id: turmaProva.prova.id,

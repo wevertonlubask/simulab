@@ -107,7 +107,7 @@ export default async function AlunoProvasPage() {
       const tentativasIlimitadas = tp.prova.tentativasMax === null;
       const tentativasRestantes = tentativasIlimitadas
         ? Infinity
-        : Math.max(0, tp.prova.tentativasMax - tentativasRealizadas);
+        : Math.max(0, (tp.prova.tentativasMax ?? 0) - tentativasRealizadas);
       const melhorNota = provaTentativas.reduce((max, t) => {
         if (t.nota !== null && t.nota > max) return t.nota;
         return max;

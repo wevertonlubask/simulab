@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Terminal } from "lucide-react";
@@ -26,20 +26,13 @@ export function ComandoDisplay({
   disabled = false,
   showResult = false,
 }: ComandoDisplayProps) {
-  const [comando, setComando] = useState(value?.comando || "");
+  // Usar diretamente o value para evitar dessincronização
+  const comando = value?.comando || "";
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Inicializar com resposta existente
-  useEffect(() => {
-    if (value?.comando) {
-      setComando(value.comando);
-    }
-  }, []);
 
   // Atualizar comando
   const handleChange = useCallback(
     (novoComando: string) => {
-      setComando(novoComando);
       onChange({ comando: novoComando });
     },
     [onChange]
